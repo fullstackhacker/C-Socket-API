@@ -3,15 +3,19 @@
 /* Inclusions */
 #include "sock352.h"
 
-/* Library Functions */
+/* Global Variables */
+sockaddr_sock352_t *sockaddr; 
 
+
+/* Library Functions */
 /* initialzation function */
 int sock352_init(int udp_port){
- return 0; 
+  if(udp_port == 0) sockaddr->sin_port = SOCK352_DEFAULT_UDP_PORT;
+  else sockaddr->sin_port = udp_port;  
 }
 
 int sock352_socket(int domain, int type, int protocol){
-  return 0; 
+  return socket(domain, type, protocol); //pretty sure this isn't right
 }
 
 int sock352_bind(int fd, sockaddr_sock352_t *addr, socklen_t len){
