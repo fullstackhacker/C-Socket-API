@@ -14,6 +14,12 @@ int sock352_init(int udp_port){
   else sockaddr->sin_port = udp_port;  
 }
 
+/* 
+@param : domain --> address family type
+@param : type --> type of socket (stream, write, etc.)
+@param : protocol --> TCP/UDP ? 
+@return : socket file descriptor -- kind of like an index or a hash for the file descriptor
+*/
 int sock352_socket(int domain, int type, int protocol){
   return socket(domain, type, protocol); //pretty sure this isn't right
 }
