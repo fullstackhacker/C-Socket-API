@@ -78,7 +78,7 @@ int sock352_bind(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	/*
 	 * Get the socket from the hashtable
 	 */
-	if((sock352 = findSocket(fd)) == SOCK352_FAILURE) return SOCK352_FAILURE;
+	if((sock352 = findSocket(fd)) == NULL) return SOCK352_FAILURE;
 
 	return 0; 
 }
@@ -87,18 +87,57 @@ int sock352_bind(int fd, sockaddr_sock352_t *addr, socklen_t len)
  *  sock352_connect
  *
  *  initiates a connection from the client who just sent a SYN ???
- *  called only from client ???
+ *  called only from client 
  */ 
 int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 {
-	
 	socket352 *sock352; 
 
 	/*
 	 * Get the socket from the hashtable
 	 */
-	if((sock352 = findSocket(fd)) == SOCK352_FAILURE) return SOCK352_FAILURE;
+	if((sock352 = findSocket(fd)) == NULL) return SOCK352_FAILURE;
 	
+	/*
+	 * Create our own socket that uses UDP so that we can send packets to the server
+	 */
+	int sock_fd = 0;
+	if((sock_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0){
+		printf("Failed to create socket during sock352_connect()"); 
+		return SOCK352_FAILURE;
+	}
+
+	/* 
+	 * Connect to the server that the user wants to connect to 
+	 */
+	struct sockaddr_in *servaddr = (struct sockaddr_in*)calloc(1, sizeof(struct sockaddr_in)); 
+	servaddr->sin_family = AF_INET;
+	servaddr->sin_addr.s_addr = addr->sin_addr.s_addr;
+	servaddr->sin_port = addr->sin_port; 
+
+	/*
+	 * UDP is connectionless so we only need to bind to the port here 
+	 */
+	if(bind(sock_fd, (const struct sockaddr *) &servaddr, sizeof(struct sockaddr_in)) != 0){
+		printf("Failed to bind socket during sock352_connect()");	
+		return SOCK352_FAILURE;
+	}
+
+	/*
+	 * Create the first packet (header only, no app data) to send to server 
+	 * The SYN bit is supposed to be set to 1 (one of the flag bits)
+	 * Also have to choose some initial sequence number and put that number in the sequence_no field
+	 */
+	sock352_pkt_hdr_t *packet = (sock352_pkt_hdr_t *)calloc(1, sizeof(sock352_pkt_hdr_t));	
+	packet->flags = SOCK352_SYN; /* ? */
+	packet->sequence_no = 111111; /* Replace with some sort of random number gen */
+
+
+	
+	/*
+	 * Send the packet to the server 
+	 */
+
 
 	return 0;
 }
