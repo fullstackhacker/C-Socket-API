@@ -1,3 +1,8 @@
+/*
+ * I like C comments like this. The start and end delimiters should
+ * be on lines by themselves so you can changes/add comments easily
+ */ 
+
 /* CS352 Socket Library Implementation */
 
 /* Inclusions */
