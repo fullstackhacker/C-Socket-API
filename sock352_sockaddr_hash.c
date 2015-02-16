@@ -1,24 +1,24 @@
-/* Inclusions */
 #include <stdio.h>
 #include "uthash.h"
 #include "sock352.h"
 
-/* Socket Hash Structure */
+/* 
+ * Socket Hash Structure 
+ */
 struct sockaddr_sock352_hash {
   int fd; /* file descriptor - to be used for the hash */
   sockaddr_sock352_t *socket; /* thing we are hashing bruh */
   UT_hash_handle hh; /* hashable mashable playable fun */
 }; 
 
-/* typedef it to something simple */
 typedef struct sockaddr_sock352_hash sockaddr_sock352_hash_t; 
 
-/* hashtable for sockets */
+/*
+ * hashtable for sockets 
+ */
 sockaddr_sock352_hash_t *sockets = NULL; 
 
-/* ID generator */
-int id = 0; //global
-
+int id = 0; 
 int nextId(){ //gives back teh next number - works cause we're not using persistant storage
   return id++; 
 }

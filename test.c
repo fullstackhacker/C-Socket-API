@@ -1,8 +1,6 @@
-/* inclusions */
 #include "sock352_sockaddr_hash.c"
 #include <stdio.h>
 
-/* main program for test.. call the tesst functions from here */
 int main(int argc, char **argv){
 	//hashing_single_socket();
 	hashing_two_sockets();

@@ -3,30 +3,28 @@
  * be on lines by themselves so you can changes/add comments easily
  */ 
 
-/* CS352 Socket Library Implementation */
-
-/* Inclusions */
+/* 
+ * CS352 Socket Library Implementation 
+ */
 #include "sock352.h"
+#include "sock352_sockaddr_hash"
 
-/* Global Variables */
-sockaddr_sock352_t *sockaddr; 
-
-
-/* Library Functions */
-/* initialzation function */
+/* 
+ * initialzation function 
+ */
 int sock352_init(int udp_port){
   if(udp_port == 0) sockaddr->sin_port = SOCK352_DEFAULT_UDP_PORT;
   else sockaddr->sin_port = udp_port;  
 }
 
 /* 
-@param : domain --> address family type
-@param : type --> type of socket (stream, write, etc.)
-@param : protocol --> TCP/UDP ? 
-@return : socket file descriptor -- kind of like an index or a hash for the file descriptor
+ * @param : domain --> address family type
+ * @param : type --> type of socket (stream, write, etc.)
+ * @param : protocol --> TCP/UDP ? 
+ * @return : socket file descriptor -- kind of like an index or a hash for the file descriptor
 */
 int sock352_socket(int domain, int type, int protocol){
-  return socket(domain, type, protocol); //pretty sure this isn't right
+  return 0;
 }
 
 int sock352_bind(int fd, sockaddr_sock352_t *addr, socklen_t len){
