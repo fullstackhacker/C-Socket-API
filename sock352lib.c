@@ -10,14 +10,10 @@
  */
 
 #include "sock352.h"
-#include "sock352_sockaddr_hash"
-
-#define FAIL -1
-#define SUCCESS 0
+#include "socket352.c"
 
 
-/* temporary fix to get it to compile -- will figure out how it should be */
-sockaddr_sock352_t *socket; 
+socket352 *sock; 
 
 /*
  *  sock352_init
@@ -27,25 +23,25 @@ sockaddr_sock352_t *socket;
  */
 int sock352_init(int udp_port)
 {
-	/* Do we need to create a socket structure here?
-	   maybe malloc some memory? */
-     if(udp_port == 0) socket->sin_port = SOCK352_DEFAULT_UDP_PORT;
-     else socket->sin_port = udp_port;
 
-     /* client calls with -1 ? is this an error? we should return -1? */
-
-		 /* should probably be an error */
-		
-
-     return(SUCCESS)
+		if(udp_port < 0) return SOCK352_FAILURE;
+	
+		/*
+		 * Initialize socket with port value 
+		 */
+		sock = (socket352 *)calloc(1, sizeof(socket352)); 
+    if(udp_port == 0) sock->port = SOCK352_DEFAULT_UDP_PORT;
+    else sock->port = udp_port;
+    
+		return(SOCK352_SUCCESS);
 }
 
 /*
  * sock352_socket
- *
+
  * creates a socket and returns an fd
  * called by both client and server sides
-/* 
+* 
 @param : domain --> address family type
 @param : type --> type of socket (stream, write, etc.)
 @param : protocol --> TCP/UDP ? 
@@ -53,7 +49,21 @@ int sock352_init(int udp_port)
 */
 int sock352_socket(int domain, int type, int protocol)
 {
-     return 0;
+    if(domain != PF_CS352) return SOCK352_FAILURE; 
+		if(type != SOCK_STREAM) return SOCK352_FAILURE; 
+		if(protocol != 0) return SOCK352_FAILURE; 
+	
+		/* 
+		 * Set socket info(?) 
+		 */
+		sock->domain = domain; 
+		sock->type = type; 
+		sock->protocol = protocol; 
+
+		/* 
+		 * Add socket to the hash table
+		 */
+		return addSocket(sock);
 }
 
 /*
