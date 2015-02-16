@@ -24,16 +24,16 @@ socket352 *sock;
 int sock352_init(int udp_port)
 {
 
-		if(udp_port < 0) return SOCK352_FAILURE;
-	
-		/*
-		 * Initialize socket with port value 
-		 */
-		sock = (socket352 *)calloc(1, sizeof(socket352)); 
+	if(udp_port < 0) return SOCK352_FAILURE;
+
+	/*
+	 * Initialize socket with port value 
+	 */
+	sock = (socket352 *)calloc(1, sizeof(socket352)); 
     if(udp_port == 0) sock->port = SOCK352_DEFAULT_UDP_PORT;
     else sock->port = udp_port;
     
-		return(SOCK352_SUCCESS);
+	return(SOCK352_SUCCESS);
 }
 
 /*
@@ -50,20 +50,20 @@ int sock352_init(int udp_port)
 int sock352_socket(int domain, int type, int protocol)
 {
     if(domain != PF_CS352) return SOCK352_FAILURE; 
-		if(type != SOCK_STREAM) return SOCK352_FAILURE; 
-		if(protocol != 0) return SOCK352_FAILURE; 
+	if(type != SOCK_STREAM) return SOCK352_FAILURE; 
+	if(protocol != 0) return SOCK352_FAILURE; 
 	
-		/* 
-		 * Set socket info(?) 
-		 */
-		sock->domain = domain; 
-		sock->type = type; 
-		sock->protocol = protocol; 
+	/* 
+	 * Set socket info(?) 
+	 */
+	sock->domain = domain; 
+	sock->type = type; 
+	sock->protocol = protocol; 
 
-		/* 
-		 * Add socket to the hash table
-		 */
-		return addSocket(sock);
+	/* 
+	 * Add socket to the hash table
+	 */
+	return addSocket(sock);
 }
 
 /*
