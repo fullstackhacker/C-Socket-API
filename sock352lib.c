@@ -15,6 +15,10 @@
 #define FAIL -1
 #define SUCCESS 0
 
+
+/* temporary fix to get it to compile -- will figure out how it should be */
+sockaddr_sock352_t *socket; 
+
 /*
  *  sock352_init
  *
@@ -25,11 +29,13 @@ int sock352_init(int udp_port)
 {
 	/* Do we need to create a socket structure here?
 	   maybe malloc some memory? */
-     if(udp_port == 0) sockaddr->sin_port = SOCK352_DEFAULT_UDP_PORT;
-     else sockaddr->sin_port = udp_port;
+     if(udp_port == 0) socket->sin_port = SOCK352_DEFAULT_UDP_PORT;
+     else socket->sin_port = udp_port;
 
      /* client calls with -1 ? is this an error? we should return -1? */
 
+		 /* should probably be an error */
+		
 
      return(SUCCESS)
 }
