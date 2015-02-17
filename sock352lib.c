@@ -11,7 +11,7 @@
 
 #include "sock352.h"
 #include "socket352.c"
-
+#include <errno.h>
 
 socket352 *sock; 
 
@@ -102,23 +102,25 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	 * Create our own socket that uses UDP so that we can send packets to the server
 	 */
 	int sock_fd = 0;
-	if((sock_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0){
-		printf("Failed to create socket during sock352_connect()"); 
+	if((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
+		printf("Failed to create socket during sock352_connect()\n"); 
 		return SOCK352_FAILURE;
 	}
 
 	/* 
-	 * Connect to the server that the user wants to connect to 
+	 * Socket Address on this (client) Side
 	 */
-	struct sockaddr_in *servaddr = (struct sockaddr_in*)calloc(1, sizeof(struct sockaddr_in)); 
-	servaddr->sin_family = AF_INET;
-	servaddr->sin_addr.s_addr = addr->sin_addr.s_addr;
-	servaddr->sin_port = addr->sin_port; 
+	struct sockaddr_in *self = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
+	self->sin_family = AF_INET;
+	self->sin_addr.s_addr = htonl(INADDR_ANY);
+	self->sin_port = htons(sock352->port); 
+	
+	printf("self->sin_family: %u\nself->sin_addr.s_addr: %u\nself->port: %u\n", self->sin_family, self->sin_addr.s_addr, self->sin_port); 
 
 	/*
 	 * UDP is connectionless so we only need to bind to the port here 
 	 */
-	if(bind(sock_fd, (const struct sockaddr *) &servaddr, sizeof(struct sockaddr_in)) != 0){
+	if(bind(sock_fd, (const struct sockaddr *) &self, sizeof(struct sockaddr_in)) != 0){
 		printf("Failed to bind socket during sock352_connect()");	
 		return SOCK352_FAILURE;
 	}
@@ -129,15 +131,32 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	 * Also have to choose some initial sequence number and put that number in the sequence_no field
 	 */
 	sock352_pkt_hdr_t *packet = (sock352_pkt_hdr_t *)calloc(1, sizeof(sock352_pkt_hdr_t));	
-	packet->flags = SOCK352_SYN; /* ? */
-	packet->sequence_no = 111111; /* Replace with some sort of random number gen */
+	packet->version = SOCK352_VER_1; 
+	packet->flags = SOCK352_SYN << 2; 
+	packet->protocol = sock352->protocol; 
+	packet->source_port = sock352->port; 
+	packet->dest_port = addr->sin_port; 
+	packet->sequence_no = 0; //generate random number for this
+	packet->payload_len = 0; /* no payload for first packet */	
+	packet->header_len = sizeof(*packet);
 
-
+	/*
+	 * Create the destination sockaddr_in
+	 */
+	struct sockaddr_in *serv = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
+	serv->sin_family = AF_INET; 
+	serv->sin_addr.s_addr  = addr->sin_addr.s_addr;
+	serv->sin_port = addr->sin_port; 
 	
+	printf("serv->sin_family: %u\nserv->sin_addr.s_addr: %u\nserv->sin_port: %u\n", serv->sin_family, serv->sin_addr.s_addr, serv->sin_port);
+	printf("sock_fd: %u\n", sock_fd);	
+
 	/*
 	 * Send the packet to the server 
 	 */
-
+	int bytesSent = sendto(sock_fd, packet, sizeof(packet), 0, (const struct sockaddr *) &serv, sizeof(struct sockaddr_in)); 
+	
+	printf("bytesSent: %d\nERRNO: %s\n", bytesSent, strerror(errno)); 
 
 	return 0;
 }

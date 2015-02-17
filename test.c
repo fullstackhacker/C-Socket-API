@@ -23,3 +23,8 @@ int hashing_single_socket(){
 int hashing_two_sockets(){
 
 }
+
+int flags(){
+	int temp = 1 << 2;
+	printf("%d\n");
+}
