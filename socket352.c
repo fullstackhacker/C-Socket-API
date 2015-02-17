@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <time.h>
+#include <stdlib.h>
 #include "uthash.h"
 #include "sock352.h"
 
@@ -97,4 +99,8 @@ int deleteSocket(int socket_fd){
 	HASH_DEL(sockets, socket);
 	free(socket);
 	return SOCK352_SUCCESS;
+}
+
+int genSerialNumber(int max){
+	return rand() % max;
 }

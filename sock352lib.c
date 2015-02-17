@@ -144,11 +144,11 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	 */
 	sock352_pkt_hdr_t *packet = (sock352_pkt_hdr_t *)calloc(1, sizeof(sock352_pkt_hdr_t));	
 	packet->version = SOCK352_VER_1; 
-	packet->flags = SOCK352_SYN << 2; 
+	packet->flags = SOCK352_SYN; 
 	packet->protocol = sock352->protocol; 
 	packet->source_port = sock352->port; 
 	packet->dest_port = addr->sin_port; 
-	packet->sequence_no = 0; //generate random number for this
+	packet->sequence_no = genSerialNumber(10000); 
 	packet->payload_len = 0; /* no payload for first packet */	
 	packet->header_len = sizeof(*packet);
 	
@@ -159,13 +159,44 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 
 	/*
 	 * Send the packet to the server 
-	 *
-	 *
-	 * For some reason this is error and saying that the address family is not supported by the protocol. Meaning AF_INET is not supported by UDP? 
 	 */
-	int bytesSent = sendto(sock_fd, packet, sizeof(packet), 0, (const struct sockaddr *) dest, sizeof(struct sockaddr_in)); 
+	printf("Sending packet to server...\n");
+	if(sendto(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (const struct sockaddr *) dest, sizeof(struct sockaddr_in)) < 0){
+		printf("failed to send packet in sock352_connect()\nERRNO: %s\n", strerror(errno));
+		return SOCK352_FAILURE;	
+	}
+
+	printf("packet->seq_no: %d\n", packet->sequence_no);
 	
-	printf("bytesSent: %d\nERRNO: %s\n", bytesSent, strerror(errno)); 
+	/*
+	 * Receive the response packet from the server 
+	 */
+	struct sockaddr_in *fromServer = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in));
+	socklen_t fromServerSize = sizeof(struct sockaddr_in);
+	
+	printf("Waiting on packet from server...\n");
+	if(recvfrom(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *) fromServer, &fromServerSize) < 0){
+		printf("failed to read packet from server in sock352_connect()\nERRNO: %s\n", strerror(errno));
+		return SOCK352_FAILURE; 
+	}
+
+	printf("packet->ack_no: %d\n", packet->ack_no);
+
+	/* 
+	 * Stuff to do with the received packet
+	 */
+
+
+	/*
+	 * Send the last packet to the server
+	printf("Sending packet to server...\n");
+	if(sendto(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (const struct sockaddr *) dest, sizeof(struct sockaddr_in)) < 0){
+		printf("failed to send packet in sock352_connect()\nERRNO: %s\n", strerror(errno));
+		return SOCK352_FAILURE;	
+	}
+	 */
+	
+
 
 	return SOCK352_SUCCESS;
 }
@@ -232,13 +263,29 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	struct sockaddr_in *from = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
 	socklen_t fromSize = sizeof(struct sockaddr_in);	
 
+	/*
+	 * Wait for a packet to come in 
+	 */
 	printf("Waiting to receive bytes...\n");
-	int recvBytes = recvfrom(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *) from, &fromSize); 
-	
-	
-	printf("version: %u\nflags: %u\n", packet->version, packet->flags);
+	if(recvfrom(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *) from, &fromSize) < 0){
+		printf("Failed to read from socket in sock352_accept()\nERRNO: %s\n", strerror(errno));
+		return SOCK352_FAILURE; 
+	}
 
-	printf("revcBytes: %d\nERRNO: %s\n", recvBytes, strerror(errno)); 
+	/*
+	 * Set Up Response Packet 
+	 */
+	packet->ack_no = packet->sequence_no + 1;
+	packet->flags = SOCK352_ACK | SOCK352_SYN;	
+	packet->sequence_no = genSerialNumber(10000);
+
+	/*
+	 * Send a packet to the person
+	 */
+	if(sendto(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (const struct sockaddr *)from, sizeof(struct sockaddr_in)) < 0){
+		printf("Failed to send packet in sock352_accept()\nERRNO: %s\n", strerror(errno));
+		return SOCK352_FAILURE; 
+	}
 
 	return SOCK352_SUCCESS;
 
