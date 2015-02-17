@@ -116,7 +116,7 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	 */
 	int sock_fd = 0;
 	if((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
-		printf("Failed to create socket during sock352_connect()\n"); 
+		printf("Failed to create socket during sock352_connect(): %s\n", strerror(errno)); 
 		return SOCK352_FAILURE;
 	}
 
@@ -124,7 +124,7 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	 * Socket Address on this (client) Side
 	 */
 	struct sockaddr_in *self = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
-	self->sin_family = AF_INET;
+	self->sin_family = AF_CS352;
 	self->sin_addr.s_addr = htonl(INADDR_ANY);
 	self->sin_port = htons(sock352->port); 
 	
@@ -134,7 +134,7 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	 * UDP is connectionless so we only need to bind to the port here 
 	 */
 	if(bind(sock_fd, (const struct sockaddr *) &self, sizeof(struct sockaddr_in)) != 0){
-		printf("Failed to bind socket during sock352_connect()");	
+		printf("Failed to bind socket during sock352_connect(): %s\n", strerror(errno));	
 		return SOCK352_FAILURE;
 	}
 
@@ -157,8 +157,8 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	 * Create the destination sockaddr_in
 	 */
 	struct sockaddr_in *serv = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
-	serv->sin_family = AF_INET; 
-	serv->sin_addr.s_addr  = addr->sin_addr.s_addr;
+	serv->sin_family = AF_CS352; 
+	serv->sin_addr.s_addr = addr->sin_addr.s_addr;
 	serv->sin_port = addr->sin_port; 
 	
 	printf("serv->sin_family: %u\nserv->sin_addr.s_addr: %u\nserv->sin_port: %u\n", serv->sin_family, serv->sin_addr.s_addr, serv->sin_port);
@@ -217,7 +217,7 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	 * Create the local information to receive to
 	 */
 	struct sockaddr_in *self = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
-	self->sin_family = AF_INET; 
+	self->sin_family = AF_CS352; 
 	self->sin_addr.s_addr = sock->sin_addr.s_addr; 
 	self->sin_port = sock->sin_port;
 
