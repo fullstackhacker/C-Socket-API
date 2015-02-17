@@ -69,18 +69,31 @@ int sock352_socket(int domain, int type, int protocol)
 /*
  *  sock352_bind
  *   ??? 
+ *  Bind has to take in the server socket info and put it into the socket that we created, so tha t we can use it again  later on in connect when we're setting up the actual UDP socket, since the connect() function only takes in a spot for the struct sockaddr_in *client and not the server.
+ *
  *  used by server side only
  */
 int sock352_bind(int fd, sockaddr_sock352_t *addr, socklen_t len)
 {
-	socket352 *sock352; 
 
 	/*
 	 * Get the socket from the hashtable
 	 */
+	socket352 *sock352; 
 	if((sock352 = findSocket(fd)) == NULL) return SOCK352_FAILURE;
-
-	return 0; 
+	
+	/*
+	 * Copy server socket info into our socket
+	 *
+	 * -- Should update the reference in the hash table because its a pointer
+	 */
+	sock352->sin_port = addr->sin_port; 
+	sock352->sin_addr.s_addr = addr->sin_addr.s_addr; 
+	
+	/*
+	 * Return successful bind
+	 */
+	return SOCK352_SUCCESS; 
 }
 
 /*
@@ -161,7 +174,7 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	
 	printf("bytesSent: %d\nERRNO: %s\n", bytesSent, strerror(errno)); 
 
-	return 0;
+	return SOCK352_SUCCESS;
 }
 
 /*
@@ -185,9 +198,48 @@ int sock352_listen(int fd, int n)
  */
 int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 {
-	return 0; 
-}
+	/* 
+	 * Get the local socket 
+	 */
+	socket352 *sock; 
+	if((sock = findSocket(_fd)) == NULL) return SOCK352_FAILURE; 
 
+	/*
+	 * Create the local UDP socket port 
+	 */
+	int sock_fd = 0; 
+	if((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
+		printf("Failed to create socket in sock352_accpet(): %s\n", strerror(errno));
+		return SOCK352_FAILURE; 
+	}
+
+	/*
+	 * Create the local information to receive to
+	 */
+	struct sockaddr_in *self = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
+	self->sin_family = AF_INET; 
+	self->sin_addr.s_addr = sock->sin_addr.s_addr; 
+	self->sin_port = sock->sin_port;
+
+
+	/*
+	 * Bind to the socket to the port 
+	 */
+	if(bind(sock_fd, (const struct sockaddr *)&self, sizeof(struct sockaddr_in)) != 0){
+		printf("Failed to bind socket to port during sock352_accept(): %s\n", strerror(errno));
+		return SOCK352_FAILURE; 
+	}
+
+	sock352_pkt_hdr_t *packet; 
+	
+	printf("Waiting to receive bytes...\n");
+	int recvBytes = recvfrom(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *) &self, (socklen_t *)sizeof(struct sockaddr_in)); 
+	
+	printf("revcBytes: %d\nERRNO: %s\n", recvBytes, strerror(errno)); 
+
+	return SOCK352_SUCCESS;
+
+}
 /*  sock352_close
  *
  *  Closes the specified socket connection

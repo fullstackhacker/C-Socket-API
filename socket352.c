@@ -11,6 +11,8 @@ struct socket352 {
 	int type; 
 	int protocol;
 	int port;
+	in_port_t sin_port;
+	struct in_addr sin_addr;
 	UT_hash_handle hh; /* hashable mashable playable fun */
 }; 
 
