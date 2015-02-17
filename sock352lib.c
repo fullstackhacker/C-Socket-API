@@ -153,6 +153,9 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 
 	/*
 	 * Send the packet to the server 
+	 *
+	 *
+	 * For some reason this is error and saying that the address family is not supported by the protocol. Meaning AF_INET is not supported by UDP? 
 	 */
 	int bytesSent = sendto(sock_fd, packet, sizeof(packet), 0, (const struct sockaddr *) &serv, sizeof(struct sockaddr_in)); 
 	
