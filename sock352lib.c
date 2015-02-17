@@ -32,7 +32,9 @@ int sock352_init(int udp_port)
 	sock = (socket352 *)calloc(1, sizeof(socket352)); 
     if(udp_port == 0) sock->port = SOCK352_DEFAULT_UDP_PORT;
     else sock->port = udp_port;
-    
+   
+	printf("PORT: %d\n", sock->port);
+
 	return(SOCK352_SUCCESS);
 }
 
@@ -59,7 +61,7 @@ int sock352_socket(int domain, int type, int protocol)
 	sock->domain = domain; 
 	sock->type = type; 
 	sock->protocol = protocol; 
-
+	sock->sockaddr = NULL;
 	/* 
 	 * Add socket to the hash table
 	 */
@@ -87,8 +89,7 @@ int sock352_bind(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	 *
 	 * -- Should update the reference in the hash table because its a pointer
 	 */
-	sock352->sin_port = addr->sin_port; 
-	sock352->sin_addr.s_addr = addr->sin_addr.s_addr; 
+	sock352->sockaddr = addr; 
 	
 	/*
 	 * Return successful bind
@@ -110,7 +111,7 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	 * Get the socket from the hashtable
 	 */
 	if((sock352 = findSocket(fd)) == NULL) return SOCK352_FAILURE;
-	
+
 	/*
 	 * Create our own socket that uses UDP so that we can send packets to the server
 	 */
@@ -123,17 +124,15 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	/* 
 	 * Socket Address on this (client) Side
 	 */
-	struct sockaddr_in *self = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
-	self->sin_family = AF_CS352;
-	self->sin_addr.s_addr = htonl(INADDR_ANY);
+	struct sockaddr_in *self = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in));	
+	self->sin_family = AF_INET;	
+	self->sin_addr.s_addr = INADDR_ANY;
 	self->sin_port = htons(sock352->port); 
 	
-	printf("self->sin_family: %u\nself->sin_addr.s_addr: %u\nself->port: %u\n", self->sin_family, self->sin_addr.s_addr, self->sin_port); 
-
 	/*
 	 * UDP is connectionless so we only need to bind to the port here 
 	 */
-	if(bind(sock_fd, (const struct sockaddr *) &self, sizeof(struct sockaddr_in)) != 0){
+	if(bind(sock_fd, (const struct sockaddr *) self, sizeof(struct sockaddr_in)) != 0){
 		printf("Failed to bind socket during sock352_connect(): %s\n", strerror(errno));	
 		return SOCK352_FAILURE;
 	}
@@ -152,17 +151,11 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	packet->sequence_no = 0; //generate random number for this
 	packet->payload_len = 0; /* no payload for first packet */	
 	packet->header_len = sizeof(*packet);
-
-	/*
-	 * Create the destination sockaddr_in
-	 */
-	struct sockaddr_in *serv = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
-	serv->sin_family = AF_CS352; 
-	serv->sin_addr.s_addr = addr->sin_addr.s_addr;
-	serv->sin_port = addr->sin_port; 
 	
-	printf("serv->sin_family: %u\nserv->sin_addr.s_addr: %u\nserv->sin_port: %u\n", serv->sin_family, serv->sin_addr.s_addr, serv->sin_port);
-	printf("sock_fd: %u\n", sock_fd);	
+	struct sockaddr_in *dest = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
+	dest->sin_family = AF_INET; 
+	dest->sin_addr.s_addr = addr->sin_addr.s_addr; 
+	dest->sin_port = addr->sin_port;
 
 	/*
 	 * Send the packet to the server 
@@ -170,7 +163,7 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	 *
 	 * For some reason this is error and saying that the address family is not supported by the protocol. Meaning AF_INET is not supported by UDP? 
 	 */
-	int bytesSent = sendto(sock_fd, packet, sizeof(packet), 0, (const struct sockaddr *) &serv, sizeof(struct sockaddr_in)); 
+	int bytesSent = sendto(sock_fd, packet, sizeof(packet), 0, (const struct sockaddr *) dest, sizeof(struct sockaddr_in)); 
 	
 	printf("bytesSent: %d\nERRNO: %s\n", bytesSent, strerror(errno)); 
 
@@ -203,6 +196,7 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	 */
 	socket352 *sock; 
 	if((sock = findSocket(_fd)) == NULL) return SOCK352_FAILURE; 
+	if(sock->sockaddr == NULL) printf("NULL NOPE\n");
 
 	/*
 	 * Create the local UDP socket port 
@@ -215,26 +209,35 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 
 	/*
 	 * Create the local information to receive to
-	 */
+	*/
 	struct sockaddr_in *self = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
-	self->sin_family = AF_CS352; 
-	self->sin_addr.s_addr = sock->sin_addr.s_addr; 
-	self->sin_port = sock->sin_port;
+	self->sin_family = AF_INET; 
+	self->sin_addr.s_addr = sock->sockaddr->sin_addr.s_addr; 
+	self->sin_port = sock->sockaddr->sin_port;
 
-
+	printf("binding on:\nself->sin_addr.s_addr: %u\nself->sin_port: %u\n", self->sin_addr.s_addr, self->sin_port);
+	
 	/*
 	 * Bind to the socket to the port 
 	 */
-	if(bind(sock_fd, (const struct sockaddr *)&self, sizeof(struct sockaddr_in)) != 0){
+	if(bind(sock_fd, (const struct sockaddr *)(self), sizeof(struct sockaddr_in)) != 0){
 		printf("Failed to bind socket to port during sock352_accept(): %s\n", strerror(errno));
 		return SOCK352_FAILURE; 
 	}
+	
+	/* packet buffer */
+	sock352_pkt_hdr_t *packet = (sock352_pkt_hdr_t *)calloc(1, sizeof(sock352_pkt_hdr_t)); 
+		
+	/* the from */
+	struct sockaddr_in *from = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
+	socklen_t fromSize = sizeof(struct sockaddr_in);	
 
-	sock352_pkt_hdr_t *packet; 
-	
 	printf("Waiting to receive bytes...\n");
-	int recvBytes = recvfrom(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *) &self, (socklen_t *)sizeof(struct sockaddr_in)); 
+	int recvBytes = recvfrom(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *) from, &fromSize); 
 	
+	
+	printf("version: %u\nflags: %u\n", packet->version, packet->flags);
+
 	printf("revcBytes: %d\nERRNO: %s\n", recvBytes, strerror(errno)); 
 
 	return SOCK352_SUCCESS;
