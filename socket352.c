@@ -13,6 +13,8 @@ struct socket352 {
 	int type; 
 	int protocol;
 	int port;
+    int local_port; 
+    int remote_port;
 	sockaddr_sock352_t *sockaddr; 
 	UT_hash_handle hh; /* hashable mashable playable fun */
 }; 

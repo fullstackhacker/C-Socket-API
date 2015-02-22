@@ -35,7 +35,39 @@ int sock352_init(int udp_port)
    
 	printf("PORT: %d\n", sock->port);
 
-	return(SOCK352_SUCCESS);
+	return SOCK352_SUCCESS;
+}
+
+/*
+ *  sock352_init2
+ *
+ *  initializes the local and remote port if they are set
+ *
+ */
+int sock352_init2(int remote_port, int local_port)
+{
+
+    if(local_port < 0 || remote_port < 0) return SOCK352_FAILURE; 
+
+    /*
+     * Check if the ports are 0
+     */
+    if(local_port == 0) sock->local_port = SOCK352_DEFAULT_UDP_PORT; 
+    if(remote_port == 0) sock->remote_port = SOCK352_DEFAULT_UDP_PORT;
+   
+    /*
+     * Check if the local ports have been set)
+     */
+    if(sock->local_port > 0 && sock->remote_port > 0) return SOCK352_SUCCESS;
+    
+
+    /*
+     * Set the socket ports as normal
+     */
+    sock->local_port = local_port; 
+    sock->remote_port = remote_port; 
+    return SOCK352_SUCCESS;
+
 }
 
 /*
@@ -165,7 +197,8 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 		printf("failed to send packet in sock352_connect()\nERRNO: %s\n", strerror(errno));
 		return SOCK352_FAILURE;	
 	}
-
+    
+    int client_seqNo = packet->sequence_no+1; 
 	printf("packet->seq_no: %d\n", packet->sequence_no);
 	
 	/*
@@ -178,23 +211,36 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	if(recvfrom(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *) fromServer, &fromServerSize) < 0){
 		printf("failed to read packet from server in sock352_connect()\nERRNO: %s\n", strerror(errno));
 		return SOCK352_FAILURE; 
-	}
+    }
 
+    /*
+     * Make sure the ack_no on the response packet is right
+     */
 	printf("packet->ack_no: %d\n", packet->ack_no);
+    if(packet->ack_no != client_seqNo){
+        printf("Invalid ack_no from response packet in sock352_connect()\n");
+        return SOCK352_FAILURE;
+    }
 
 	/* 
 	 * Stuff to do with the received packet
+     *
+     * take the received packet and put the server's seq_no, add one to it and put it in the ack field
+     * then take the ack_no on the received packet and add one to it and put it in the seq_no field
 	 */
-
-
+    client_seqNo++; 
+    packet->ack_no = packet->sequence_no++; 
+    packet->sequence_no = client_seqNo; 
+    
 	/*
 	 * Send the last packet to the server
+	 */
 	printf("Sending packet to server...\n");
 	if(sendto(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (const struct sockaddr *) dest, sizeof(struct sockaddr_in)) < 0){
 		printf("failed to send packet in sock352_connect()\nERRNO: %s\n", strerror(errno));
 		return SOCK352_FAILURE;	
 	}
-	 */
+
 	
 
 
