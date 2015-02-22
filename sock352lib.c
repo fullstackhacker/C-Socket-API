@@ -296,9 +296,9 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	struct sockaddr_in *self = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
 	self->sin_family = AF_INET; 
 	self->sin_addr.s_addr = sock->sockaddr->sin_addr.s_addr; 
-	self->sin_port = sock->sockaddr->sin_port;
-
-	printf("binding on:\nself->sin_addr.s_addr: %u\nself->sin_port: %u\n", self->sin_addr.s_addr, self->sin_port);
+	self->sin_port = sock->port;
+	
+	printf("binding on:\nself->sin_addr.s_addr: %u\nself->sin_port: %hu\n", self->sin_addr.s_addr, self->sin_port);
 	
 	/*
 	 * Bind to the socket to the port 
