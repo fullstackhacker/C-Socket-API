@@ -47,8 +47,14 @@ int sock352_init(int udp_port)
 int sock352_init2(int remote_port, int local_port)
 {
 
-    if(local_port < 0 || remote_port < 0) return SOCK352_FAILURE; 
 
+    if(local_port < 0 || remote_port < 0) return SOCK352_FAILURE; 
+    
+    /* 
+     * initalize the socket struct 
+     */
+    sock = (socket352 *)calloc(1, sizeof(socket352));
+    
     /*
      * Check if the ports are 0
      */
