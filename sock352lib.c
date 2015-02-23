@@ -13,6 +13,11 @@
 #include "socket352.c"
 #include <errno.h>
 
+/*
+ * macro to check to see if a specific bit is set
+ */
+#define CHECK_BIT(var, pos) ((var) & (1 << pos))
+
 socket352 *sock; 
 
 /*
@@ -247,9 +252,6 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 		return SOCK352_FAILURE;	
 	}
 
-	
-
-
 	return SOCK352_SUCCESS;
 }
 
@@ -296,7 +298,7 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	struct sockaddr_in *self = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
 	self->sin_family = AF_INET; 
 	self->sin_addr.s_addr = sock->sockaddr->sin_addr.s_addr; 
-	self->sin_port = sock->port;
+	self->sin_port = htons(sock->port);
 	
 	printf("binding on:\nself->sin_addr.s_addr: %u\nself->sin_port: %hu\n", self->sin_addr.s_addr, self->sin_port);
 	
@@ -325,22 +327,48 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	}
 
 	/*
+	 * Check to see if SYN bit is set
+	 * 
+	 * if its not set, its a bad packet
+	 */
+	if(!(CHECK_BIT(packet->flags, 1))) return SOCK352_FAILURE;
+
+	/*
 	 * Set Up Response Packet 
 	 */
 	packet->ack_no = packet->sequence_no + 1;
 	packet->flags = SOCK352_ACK | SOCK352_SYN;	
 	packet->sequence_no = genSerialNumber(10000);
-
+	
+	int serv_seq = packet->sequence_no+1;
+		
 	/*
-	 * Send a packet to the person
+	 * Send a packet to the client 
 	 */
 	if(sendto(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (const struct sockaddr *)from, sizeof(struct sockaddr_in)) < 0){
 		printf("Failed to send packet in sock352_accept()\nERRNO: %s\n", strerror(errno));
 		return SOCK352_FAILURE; 
 	}
 
-	return SOCK352_SUCCESS;
+	/*
+	 * Receive a packet
+	 */
+	if(recvfrom(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *)from, &fromSize) < 0){
+		printf("Failed to read from socket in sock352_accept()\nERRNO: %s\n", strerror(errno)); 
+		return SOCK352_FAILURE; 
+	}
 
+	/*
+	 * the SYN bit should not be set
+	 */
+	if(CHECK_BIT(packet->flags, 1)) return SOCK352_SUCCESS;
+	
+	/*
+	 * Check ot see if the ack number is proper 
+	 */
+	if(packet->ack_no != serv_seq) return SOCK352_FAILURE;
+
+	return SOCK352_SUCCESS;
 }
 /*  sock352_close
  *
