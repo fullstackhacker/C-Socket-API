@@ -194,11 +194,18 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	packet->sequence_no = genSerialNumber(10000); 
 	packet->payload_len = 0; /* no payload for first packet */	
 	packet->header_len = sizeof(*packet);
-	
+    
+    /*
+     * Set up destination sockaddr struct 
+     */
 	struct sockaddr_in *dest = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
 	dest->sin_family = AF_INET; 
 	dest->sin_addr.s_addr = addr->sin_addr.s_addr; 
 	dest->sin_port = addr->sin_port;
+    
+    printf("dest_port = %hu\n", dest->sin_port);
+
+
 
 	/*
 	 * Send the packet to the server 
@@ -300,7 +307,7 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	self->sin_addr.s_addr = sock->sockaddr->sin_addr.s_addr; 
 	self->sin_port = htons(sock->port);
 	
-	printf("binding on:\nself->sin_addr.s_addr: %u\nself->sin_port: %hu\n", self->sin_addr.s_addr, self->sin_port);
+	printf("binding on:\nself->sin_addr.s_addr: %u\nself->sin_port: %u\n", self->sin_addr.s_addr, self->sin_port);
 	
 	/*
 	 * Bind to the socket to the port 
