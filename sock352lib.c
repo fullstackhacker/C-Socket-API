@@ -338,7 +338,10 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	 * 
 	 * if its not set, its a bad packet
 	 */
-	if(!(CHECK_BIT(packet->flags, 1))) return SOCK352_FAILURE;
+	if(!(CHECK_BIT(packet->flags, 1))){
+        printf("SYN BIT is not set.\npacket->flags: %u\nERRNO: %s\n", packet->flags, strerror(errno));
+        return SOCK352_FAILURE;
+    }
 
 	/*
 	 * Set Up Response Packet 
@@ -368,8 +371,11 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	/*
 	 * the SYN bit should not be set
 	 */
-	if(CHECK_BIT(packet->flags, 1)) return SOCK352_SUCCESS;
-	
+	if(CHECK_BIT(packet->flags, 1)){
+        printf("SYN bit is set\npacket->flags: %u\nERRNO %s\n", packet->flags, strerror(errno)); 
+        return SOCK352_SUCCESS;
+	}
+
 	/*
 	 * Check ot see if the ack number is proper 
 	 */
