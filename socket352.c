@@ -15,7 +15,9 @@ struct socket352 {
 	int port;
     int local_port; 
     int remote_port;
+    int n; /* number of connections allowed */
 	sockaddr_sock352_t *sockaddr; 
+    struct sockaddr_in **connections; /* array of current connections */
 	UT_hash_handle hh; /* hashable mashable playable fun */
 }; 
 
@@ -105,4 +107,31 @@ int deleteSocket(int socket_fd){
 
 int genSerialNumber(int max){
 	return rand() % max;
+}
+
+int addClient(socket352 *socket, struct sockaddr_in *client){
+    /* 
+     * Connections is contiguous! Oh snap
+     */
+    struct sockaddr_in *ptr = *(socket->connections); 
+
+    /* 
+     * Find a connection spot thats open
+     */
+    int i;
+    for(i=0; i< socket->n; i++){
+        if(ptr == NULL){
+            /* 
+             * connection availible at ptr
+             */
+            ptr = client; 
+            return 0;
+        }
+    }
+
+    /*
+     * Unable to add connection 
+     */
+    return -1;
+     
 }

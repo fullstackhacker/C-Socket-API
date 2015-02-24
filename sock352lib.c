@@ -247,8 +247,9 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
      * then take the ack_no on the received packet and add one to it and put it in the seq_no field
 	 */
     client_seqNo++; 
-    packet->ack_no = packet->sequence_no++; 
+    packet->ack_no = packet->sequence_no+1; 
     packet->sequence_no = client_seqNo; 
+    packet->flags = 0; 
     
 	/*
 	 * Send the last packet to the server
@@ -271,7 +272,29 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
  */
 int sock352_listen(int fd, int n)
 {
-	return 0; 
+	/*
+	 * Get the local socket 
+	 */
+	 socket352 *socket; 
+	 if((socket = findSocket(fd)) == NULL){
+	 	printf("Bad socket fd in sock352_listen()");
+	 	return SOCK352_FAILURE;
+	 }
+
+	 /*
+	  * Allocate space for the all the connections that are supposed to be possible 
+	  */
+	 socket->connections = (struct sockaddr_in **)calloc(n, sizeof(struct sockaddr_in *));
+	 socket->n = n;
+	 struct sockaddr_in *ptr = *(socket->connections); 
+
+	 int i; 
+	 for(i=0; i<n; i++){
+	 	ptr = NULL;
+	 	ptr++;
+	 }
+
+	 return SOCK352_SUCCESS;
 }
 
 /*
@@ -334,19 +357,30 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	}
 
 	/*
+	 * Add client to the list of connections 
+	 */
+	if(addClient(sock, from) != 0){
+		printf("Failed to add client to current connections\n"); 
+		return SOCK352_FAILURE;
+	}
+
+	/*
 	 * Check to see if SYN bit is set
 	 * 
 	 * if its not set, its a bad packet
 	 */
-	if(!(CHECK_BIT(packet->flags, 1))) return SOCK352_FAILURE;
+	if((CHECK_BIT(packet->flags, 1))){
+        printf("SYN BIT is not set.\npacket->flags: %u\nERRNO: %s\n", packet->flags, strerror(errno));
+        return SOCK352_FAILURE;
+    }
 
 	/*
 	 * Set Up Response Packet 
 	 */
 	packet->ack_no = packet->sequence_no + 1;
-	packet->flags = SOCK352_ACK | SOCK352_SYN;	
+	packet->flags = SOCK352_SYN; 	
 	packet->sequence_no = genSerialNumber(10000);
-	
+	printf("packet->sequnce number: %d\n", packet->sequence_no);
 	int serv_seq = packet->sequence_no+1;
 		
 	/*
@@ -368,12 +402,18 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	/*
 	 * the SYN bit should not be set
 	 */
-	if(CHECK_BIT(packet->flags, 1)) return SOCK352_SUCCESS;
-	
+	if(packet->flags == SOCK352_SYN){
+        printf("SYN bit is set\npacket->flags: %u\nERRNO %s\n", packet->flags, strerror(errno)); 
+        return SOCK352_SUCCESS;
+	}
+
 	/*
 	 * Check ot see if the ack number is proper 
 	 */
-	if(packet->ack_no != serv_seq) return SOCK352_FAILURE;
+	if(packet->ack_no != serv_seq){
+		printf("Improper ack_no in incoming packet. Should be: %d Was %d\n", serv_seq, packet->ack_no);
+		return SOCK352_FAILURE;
+	}
 
 	return SOCK352_SUCCESS;
 }
