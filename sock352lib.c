@@ -187,6 +187,11 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	}
 
 	/* 
+	 * Set the socket that we're using for the sending and receiving 
+	 */
+	sock352->udp_sock_fd = sock_fd; 
+
+	/* 
 	 * Figure out which ports to use on local and remote side 
 	 */
 	int local_port; 
@@ -341,7 +346,6 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	 */
 	socket352 *sock352; 
 	if((sock352 = findSocket(_fd)) == NULL) return SOCK352_FAILURE; 
-	if(sock352->sockaddr == NULL) printf("NULL NOPE\n");
 
 	/*
 	 * Create the local UDP socket port 
@@ -407,6 +411,7 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	fromSocket->protocol = SOCK_STREAM; 
 	fromSocket->type = 0; 
 	fromSocket->port = from->sin_port; 
+	fromSocket->udp_sock_fd = sock_fd; 
 
 	/*
 	 * Add fromSocket to the list of socket
@@ -473,7 +478,7 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 		return SOCK352_FAILURE;
 	}
 
-	printf("sock_fd: %d\nclient_fd: %d\n", sock_fd, client_fd);
+	printf("sock_fd: %d\nclient_fd: %d\n", sock352->fd, client_fd);
 
 	return client_fd;
 }
@@ -485,7 +490,30 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
  */
 int sock352_close(int fd)
 {
-	return 0; 
+	/* 
+	 * Find the socket
+	 */
+	socket352 *socket; 
+	if((socket = findSocket(fd)) == NULL){
+		printf("Unablet to find the socket: %d\n", fd); 
+		return SOCK352_FAILURE; 
+	}
+
+	/* 
+	 *  Add the packet with a FIN bit set to the end of the transmit list?
+	 */
+
+	/*
+	 * Wait for an ACK 
+	 */
+
+
+	/* 
+	 * Free stuff 
+	 */
+	deleteSocket(fd);
+	freeSockets(); /* free the sockets hash structure */
+
 }
 
 /*
@@ -495,10 +523,10 @@ int sock352_close(int fd)
  */
 int sock352_read(int fd, void *buf, int count)
 {
-	return 0; 
+	return 1; 
 }
 
 int sock352_write(int fd, void *buf, int count)
 {
-	return 0; 
+	return 1; 
 }

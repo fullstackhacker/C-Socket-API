@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "uthash.h"
 #include "sock352.h"
+#include "fragment.c"
 
 /* 
  * Hashable Socket Structure 
@@ -18,6 +19,9 @@ struct socket352 {
     int n; /* number of connections allowed */
 	sockaddr_sock352_t *sockaddr; 
     int *connections; /* array of current connections */
+    int udp_sock_fd; /* udp socket fd */
+    packet *unack_packets; /* unacknowledged packets */
+    packet *recv_packets; /* received packets */
 	UT_hash_handle hh; /* hashable mashable playable fun */
 }; 
 
@@ -103,6 +107,10 @@ int deleteSocket(int socket_fd){
 	HASH_DEL(sockets, socket);
 	free(socket);
 	return SOCK352_SUCCESS;
+}
+
+int freeSockets(){
+    free(sockets);
 }
 
 int genSerialNumber(int max){
