@@ -29,7 +29,10 @@ socket352 *sock;
 int sock352_init(int udp_port)
 {
 
-	if(udp_port < 0) return SOCK352_FAILURE;
+	if(udp_port < 0){
+		printf("Failed to set the upd_port in sock352_init()\n"); 
+		return SOCK352_FAILURE; 
+	} 
 
 	/*
 	 * Initialize socket with port value 
@@ -37,6 +40,12 @@ int sock352_init(int udp_port)
 	sock = (socket352 *)calloc(1, sizeof(socket352)); 
     if(udp_port == 0) sock->port = SOCK352_DEFAULT_UDP_PORT;
     else sock->port = udp_port;
+
+    /* 
+     * Set remote and local ports as -1 to mark as invalid 
+     */
+    sock->remote_port = -1; 
+    sock->local_port = -1; 
    
 	printf("PORT: %d\n", sock->port);
 
@@ -52,25 +61,35 @@ int sock352_init(int udp_port)
 int sock352_init2(int remote_port, int local_port)
 {
 
-
-    if(local_port < 0 || remote_port < 0) return SOCK352_FAILURE; 
+	/*
+	 * Check to see if valid ports were given
+	 */
+    if(local_port < 0 || remote_port < 0){
+    	printf("Failed to set the remote or local port in sock352_init2()\n");
+    	return SOCK352_FAILURE; 
+    }
     
     /* 
      * initalize the socket struct 
      */
     sock = (socket352 *)calloc(1, sizeof(socket352));
+
+    /* 
+     * Set the udp_port as -1 for invalid 
+     */
+    sock->port = -1; 
     
     /*
      * Check if the ports are 0
      */
-    if(local_port == 0) sock->local_port = SOCK352_DEFAULT_UDP_PORT; 
-    if(remote_port == 0) sock->remote_port = SOCK352_DEFAULT_UDP_PORT;
+    if(local_port == 0) local_port = SOCK352_DEFAULT_UDP_PORT; 
+    if(remote_port == 0) remote_port = SOCK352_DEFAULT_UDP_PORT;
    
     /*
-     * Check if the local ports have been set)
+     * Check if the local ports have been set by defaults
      */
     if(sock->local_port > 0 && sock->remote_port > 0) return SOCK352_SUCCESS;
-    
+
 
     /*
      * Set the socket ports as normal
@@ -153,7 +172,10 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	/*
 	 * Get the socket from the hashtable
 	 */
-	if((sock352 = findSocket(fd)) == NULL) return SOCK352_FAILURE;
+	if((sock352 = findSocket(fd)) == NULL){
+		printf("Unable to find the socket based on fd in sock352_connect()\n");
+		return SOCK352_FAILURE;
+	}
 
 	/*
 	 * Create our own socket that uses UDP so that we can send packets to the server
@@ -165,12 +187,29 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	}
 
 	/* 
+	 * Figure out which ports to use on local and remote side 
+	 */
+	int local_port; 
+	int remote_port; 
+
+	/* 
+	 * Check to see if we're using udp_port or local/remote port
+	 */
+	if(sock352->port != -1){ /* use the udp_port for both */
+		local_port = remote_port = sock352->port;
+	}
+	else {
+		local_port = sock352->local_port; 
+		remote_port = sock352->remote_port; 
+	}
+
+	/* 
 	 * Socket Address on this (client) Side
 	 */
 	struct sockaddr_in *self = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in));	
 	self->sin_family = AF_INET;	
 	self->sin_addr.s_addr = INADDR_ANY;
-	self->sin_port = htons(sock352->port); 
+	self->sin_port = htons(local_port); 
 	
 	/*
 	 * UDP is connectionless so we only need to bind to the port here 
@@ -201,11 +240,9 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
 	struct sockaddr_in *dest = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
 	dest->sin_family = AF_INET; 
 	dest->sin_addr.s_addr = addr->sin_addr.s_addr; 
-	dest->sin_port = addr->sin_port;
+	dest->sin_port = htons(remote_port);
     
     printf("dest_port = %hu\n", dest->sin_port);
-
-
 
 	/*
 	 * Send the packet to the server 
@@ -309,9 +346,9 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	/* 
 	 * Get the local socket 
 	 */
-	socket352 *sock; 
-	if((sock = findSocket(_fd)) == NULL) return SOCK352_FAILURE; 
-	if(sock->sockaddr == NULL) printf("NULL NOPE\n");
+	socket352 *sock352; 
+	if((sock352 = findSocket(_fd)) == NULL) return SOCK352_FAILURE; 
+	if(sock352->sockaddr == NULL) printf("NULL NOPE\n");
 
 	/*
 	 * Create the local UDP socket port 
@@ -322,13 +359,28 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 		return SOCK352_FAILURE; 
 	}
 
+	/* 
+	 * Use local/remote or udp socket port
+	 */
+	int local_port;
+	int remote_port; 
+
+	if(sock352->port != -1){ /* use udp port */
+		local_port = remote_port = sock352->port;
+	}
+	else{
+		local_port = sock352->local_port; 
+		remote_port = sock352->remote_port; 
+		printf("local_port: %u\n", local_port);
+	}
+
 	/*
 	 * Create the local information to receive to
 	*/
 	struct sockaddr_in *self = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
 	self->sin_family = AF_INET; 
-	self->sin_addr.s_addr = sock->sockaddr->sin_addr.s_addr; 
-	self->sin_port = htons(sock->port);
+	self->sin_addr.s_addr = sock352->sockaddr->sin_addr.s_addr; 
+	self->sin_port = htons(local_port);
 	
 	printf("binding on:\nself->sin_addr.s_addr: %u\nself->sin_port: %u\n", self->sin_addr.s_addr, self->sin_port);
 	
@@ -404,7 +456,7 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	 */
 	if(packet->flags == SOCK352_SYN){
         printf("SYN bit is set\npacket->flags: %u\nERRNO %s\n", packet->flags, strerror(errno)); 
-        return SOCK352_SUCCESS;
+        return SOCK352_FAILURE;
 	}
 
 	/*
