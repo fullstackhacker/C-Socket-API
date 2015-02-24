@@ -318,18 +318,11 @@ int sock352_listen(int fd, int n)
 	 	return SOCK352_FAILURE;
 	 }
 
-	 /*
-	  * Allocate space for the all the connections that are supposed to be possible 
-	  */
-	 socket->connections = (struct sockaddr_in **)calloc(n, sizeof(struct sockaddr_in *));
-	 socket->n = n;
-	 struct sockaddr_in *ptr = *(socket->connections); 
-
-	 int i; 
-	 for(i=0; i<n; i++){
-	 	ptr = NULL;
-	 	ptr++;
-	 }
+	/* 
+	 * Allocate space for the connections 
+	 */
+	socket->n = n; 
+	socket->connections = (int *)calloc(n, sizeof(int)); 
 
 	 return SOCK352_SUCCESS;
 }
@@ -408,10 +401,23 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 		return SOCK352_FAILURE; 
 	}
 
+		/* set up the from socket */
+	socket352 *fromSocket = (socket352 *)calloc(1, sizeof(socket352));
+	fromSocket->domain = AF_CS352; 
+	fromSocket->protocol = SOCK_STREAM; 
+	fromSocket->type = 0; 
+	fromSocket->port = from->sin_port; 
+
+	/*
+	 * Add fromSocket to the list of socket
+	 */
+	int client_fd = addSocket(fromSocket); 
+
+
 	/*
 	 * Add client to the list of connections 
 	 */
-	if(addClient(sock, from) != 0){
+	if(addClient(sock, client_fd) != 0){
 		printf("Failed to add client to current connections\n"); 
 		return SOCK352_FAILURE;
 	}
@@ -467,7 +473,9 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 		return SOCK352_FAILURE;
 	}
 
-	return SOCK352_SUCCESS;
+	printf("sock_fd: %d\nclient_fd: %d\n", sock_fd, client_fd);
+
+	return client_fd;
 }
 /*  sock352_close
  *

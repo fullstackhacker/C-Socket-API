@@ -8,7 +8,7 @@
  * Hashable Socket Structure 
  */
 struct socket352 {
-  int fd; /* file descriptor - to be used for the hash */
+    int fd; /* file descriptor - to be used for the hash */
 	int domain; 
 	int type; 
 	int protocol;
@@ -17,7 +17,7 @@ struct socket352 {
     int remote_port;
     int n; /* number of connections allowed */
 	sockaddr_sock352_t *sockaddr; 
-    struct sockaddr_in **connections; /* array of current connections */
+    int *connections; /* array of current connections */
 	UT_hash_handle hh; /* hashable mashable playable fun */
 }; 
 
@@ -28,7 +28,7 @@ typedef struct socket352 socket352;
  */
 socket352 *sockets = NULL;
 
-int id = 0; 
+int id = 1; 
 int nextId(){ //gives back teh next number - works cause we're not using persistant storage
 	return id++; 
 }
@@ -109,29 +109,25 @@ int genSerialNumber(int max){
 	return rand() % max;
 }
 
-int addClient(socket352 *socket, struct sockaddr_in *client){
-    /* 
-     * Connections is contiguous! Oh snap
-     */
-    struct sockaddr_in *ptr = *(socket->connections); 
-
-    /* 
-     * Find a connection spot thats open
-     */
-    int i;
-    for(i=0; i< socket->n; i++){
-        if(ptr == NULL){
-            /* 
-             * connection availible at ptr
-             */
-            ptr = client; 
-            return 0;
+int addClient(socket352 *socket, int client_fd){
+    int i; 
+    for(i=0; i<socket->n; i++){
+        printf("socket->connections[%d]: %d\n", i, (socket->connections)[i]);
+        if((socket->connections)[i] == 0){
+            (socket->connections)[i] == client_fd; 
+            return SOCK352_SUCCESS;
         }
     }
+    return SOCK352_FAILURE; 
+}
 
-    /*
-     * Unable to add connection 
-     */
-    return -1;
-     
+int removeClient(socket352 *socket, int client_fd){
+    int i; 
+    for(i=0; i<socket->n; i++){
+        if((socket->connections)[i] == client_fd){
+            (socket->connections)[i] = 0;
+            return SOCK352_SUCCESS; 
+        }
+    }
+    return SOCK352_FAILURE;
 }
