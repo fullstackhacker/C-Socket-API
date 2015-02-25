@@ -75,7 +75,7 @@ extern int sock352_write(int fd, void *buf, int count);
 #define AF_CS352 PF_CS352
 
 #define SOCK352_SUCCESS (0)
-#define SOCK352_FAILURE (-1)
+#define SOCK352_FAILURE (-1) 
 
 /* these are the options, set int the flags
  * field, for the packet

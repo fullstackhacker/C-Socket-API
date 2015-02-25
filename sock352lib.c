@@ -13,12 +13,15 @@
 #include "socket352.c"
 #include <errno.h>
 
-/*
- * macro to check to see if a specific bit is set
- */
-#define CHECK_BIT(var, pos) ((var) & (1 << pos))
+ /* 
+  * All the current (active) connections
+  */
+socket352_t *sockets;
 
-socket352 *sock; 
+/* 
+ * A temp socket to hold information 
+ */
+socket352_t *temp; 
 
 /*
  *  sock352_init
@@ -28,28 +31,32 @@ socket352 *sock;
  */
 int sock352_init(int udp_port)
 {
-
+	/* 
+	 * Check to see if port is valid 
+	 */
 	if(udp_port < 0){
 		printf("Failed to set the upd_port in sock352_init()\n"); 
 		return SOCK352_FAILURE; 
 	} 
 
 	/*
-	 * Initialize socket with port value 
+	 * Initialize temp socket
 	 */
-	sock = (socket352 *)calloc(1, sizeof(socket352)); 
-    if(udp_port == 0) sock->port = SOCK352_DEFAULT_UDP_PORT;
-    else sock->port = udp_port;
+	temp = (socket352_t *)calloc(1, sizeof(socket352_t)); 
+	initSocket(temp); 
 
-    /* 
-     * Set remote and local ports as -1 to mark as invalid 
-     */
-    sock->remote_port = -1; 
-    sock->local_port = -1; 
-   
-	printf("PORT: %d\n", sock->port);
+	/* 
+	 * Set the port values 
+	 */
+	if(udp_port == 0){
+		temp->local_port = SOCK352_DEFAULT_UDP_PORT; 
+		temp->remote_port = SOCK352_DEFAULT_UDP_PORT; 
+	}
+	else{
+		temp->local_port = temp->remote_port = udp_port; 
+	}
 
-	return SOCK352_SUCCESS;
+	return SOCK352_SUCCESS; 
 }
 
 /*
@@ -60,7 +67,6 @@ int sock352_init(int udp_port)
  */
 int sock352_init2(int remote_port, int local_port)
 {
-
 	/*
 	 * Check to see if valid ports were given
 	 */
@@ -70,34 +76,24 @@ int sock352_init2(int remote_port, int local_port)
     }
     
     /* 
-     * initalize the socket struct 
+     * Intialize the temp socket 
      */
-    sock = (socket352 *)calloc(1, sizeof(socket352));
+    temp = (socket352_t *)calloc(1, sizeof(socket352_t)); 
+    initSocket(temp);
 
     /* 
-     * Set the udp_port as -1 for invalid 
+     * Set the remote port 
      */
-    sock->port = -1; 
-    
-    /*
-     * Check if the ports are 0
-     */
-    if(local_port == 0) local_port = SOCK352_DEFAULT_UDP_PORT; 
-    if(remote_port == 0) remote_port = SOCK352_DEFAULT_UDP_PORT;
-   
-    /*
-     * Check if the local ports have been set by defaults
-     */
-    if(sock->local_port > 0 && sock->remote_port > 0) return SOCK352_SUCCESS;
+    if(remote_port == 0) temp->remote_port = SOCK352_DEFAULT_UDP_PORT; 
+    else temp->remote_port = remote_port;
 
-
-    /*
-     * Set the socket ports as normal
+    /* 
+     * Set the local port 
      */
-    sock->local_port = local_port; 
-    sock->remote_port = remote_port; 
-    return SOCK352_SUCCESS;
+    if(local_port == 0) temp->local_port = SOCK352_DEFAULT_UDP_PORT; 
+    else temp->local_port = local_port; 
 
+    return SOCK352_SUCCESS; 
 }
 
 /*
@@ -113,21 +109,36 @@ int sock352_init2(int remote_port, int local_port)
 */
 int sock352_socket(int domain, int type, int protocol)
 {
-    if(domain != PF_CS352) return SOCK352_FAILURE; 
-	if(type != SOCK_STREAM) return SOCK352_FAILURE; 
-	if(protocol != 0) return SOCK352_FAILURE; 
-	
 	/* 
-	 * Set socket info(?) 
+	 * Check to see if inputs are valid -- Don't really need them after this... 
 	 */
-	sock->domain = domain; 
-	sock->type = type; 
-	sock->protocol = protocol; 
-	sock->sockaddr = NULL;
+    if(domain != PF_CS352) {
+    	printf("Invalid domain in sock352_socket()\n"); 
+    	return SOCK352_FAILURE; 
+    }
+	if(type != SOCK_STREAM) {
+		printf("Invalid type in sock352_socket()\n"); 
+		return SOCK352_FAILURE; 
+	}
+	if(protocol != 0) {
+		printf("Invalid protocol in sock352_socket()\n"); 
+		return SOCK352_FAILURE; 
+	}
+
 	/* 
-	 * Add socket to the hash table
+	 *  Create an actual udp socket 
 	 */
-	return addSocket(sock);
+	int sock_fd = 0; 
+	if((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
+		printf("Failed to create socket in sock352_socket(): %s\n", strerror(errno)); 
+		return SOCK352_FAILURE; 
+	} 
+	temp->sock_fd = sock_fd; 
+
+	/* 
+	 * Add the socket to the socket list 
+	 */
+	int sfd = addSocket(&sockets, temp);
 }
 
 /*
@@ -139,167 +150,119 @@ int sock352_socket(int domain, int type, int protocol)
  */
 int sock352_bind(int fd, sockaddr_sock352_t *addr, socklen_t len)
 {
+	/* 
+	 * Get the socket from the connections
+	 */
+	socket352_t *socket; 
+	if((socket = findSocket(&sockets, fd)) == NULL){
+		printf("Invalid fd in sock352_bind()\n"); 
+		return SOCK352_FAILURE; 
+	}
 
-	/*
-	 * Get the socket from the hashtable
+	/* 
+	 * Set up the sockaddr for the bind (local side)
 	 */
-	socket352 *sock352; 
-	if((sock352 = findSocket(fd)) == NULL) return SOCK352_FAILURE;
-	
-	/*
-	 * Copy server socket info into our socket
-	 *
-	 * -- Should update the reference in the hash table because its a pointer
+	struct sockaddr_in *local_addr = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in));
+	local_addr->sin_family = AF_INET; 
+	local_addr->sin_addr.s_addr = addr->sin_addr.s_addr; 
+	local_addr->sin_port = htons(socket->local_port);
+
+	/* 
+	 * Actually bind 
 	 */
-	sock352->sockaddr = addr; 
-	
-	/*
-	 * Return successful bind
-	 */
+	if((bind(socket->sock_fd, (struct sockaddr *)local_addr, sizeof(struct sockaddr_in))) < 0){
+		printf("Unable to bind socket to address in sock352_bind() %s\n", strerror(errno)); 
+		return SOCK352_FAILURE; 
+	}
+
+	free(local_addr);
+
 	return SOCK352_SUCCESS; 
 }
 
 /*
  *  sock352_connect
  *
- *  initiates a connection from the client who just sent a SYN ???
  *  called only from client 
  */ 
-int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len)
+int sock352_connect(int fd, sockaddr_sock352_t *dest, socklen_t len)
 {
-	socket352 *sock352; 
-
-	/*
-	 * Get the socket from the hashtable
-	 */
-	if((sock352 = findSocket(fd)) == NULL){
-		printf("Unable to find the socket based on fd in sock352_connect()\n");
-		return SOCK352_FAILURE;
-	}
-
-	/*
-	 * Create our own socket that uses UDP so that we can send packets to the server
-	 */
-	int sock_fd = 0;
-	if((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
-		printf("Failed to create socket during sock352_connect(): %s\n", strerror(errno)); 
-		return SOCK352_FAILURE;
-	}
-
 	/* 
-	 * Set the socket that we're using for the sending and receiving 
+	 * Get our socket from the hash table 
 	 */
-	sock352->udp_sock_fd = sock_fd; 
-
-	/* 
-	 * Figure out which ports to use on local and remote side 
-	 */
-	int local_port; 
-	int remote_port; 
-
-	/* 
-	 * Check to see if we're using udp_port or local/remote port
-	 */
-	if(sock352->port != -1){ /* use the udp_port for both */
-		local_port = remote_port = sock352->port;
-	}
-	else {
-		local_port = sock352->local_port; 
-		remote_port = sock352->remote_port; 
-	}
-
-	/* 
-	 * Socket Address on this (client) Side
-	 */
-	struct sockaddr_in *self = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in));	
-	self->sin_family = AF_INET;	
-	self->sin_addr.s_addr = INADDR_ANY;
-	self->sin_port = htons(local_port); 
-	
-	/*
-	 * UDP is connectionless so we only need to bind to the port here 
-	 */
-	if(bind(sock_fd, (const struct sockaddr *) self, sizeof(struct sockaddr_in)) != 0){
-		printf("Failed to bind socket during sock352_connect(): %s\n", strerror(errno));	
-		return SOCK352_FAILURE;
-	}
-
-	/*
-	 * Create the first packet (header only, no app data) to send to server 
-	 * The SYN bit is supposed to be set to 1 (one of the flag bits)
-	 * Also have to choose some initial sequence number and put that number in the sequence_no field
-	 */
-	sock352_pkt_hdr_t *packet = (sock352_pkt_hdr_t *)calloc(1, sizeof(sock352_pkt_hdr_t));	
-	packet->version = SOCK352_VER_1; 
-	packet->flags = SOCK352_SYN; 
-	packet->protocol = sock352->protocol; 
-	packet->source_port = sock352->port; 
-	packet->dest_port = addr->sin_port; 
-	packet->sequence_no = genSerialNumber(10000); 
-	packet->payload_len = 0; /* no payload for first packet */	
-	packet->header_len = sizeof(*packet);
-    
-    /*
-     * Set up destination sockaddr struct 
-     */
-	struct sockaddr_in *dest = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
-	dest->sin_family = AF_INET; 
-	dest->sin_addr.s_addr = addr->sin_addr.s_addr; 
-	dest->sin_port = htons(remote_port);
-    
-    printf("dest_port = %hu\n", dest->sin_port);
-
-	/*
-	 * Send the packet to the server 
-	 */
-	printf("Sending packet to server...\n");
-	if(sendto(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (const struct sockaddr *) dest, sizeof(struct sockaddr_in)) < 0){
-		printf("failed to send packet in sock352_connect()\nERRNO: %s\n", strerror(errno));
-		return SOCK352_FAILURE;	
-	}
-    
-    int client_seqNo = packet->sequence_no+1; 
-	printf("packet->seq_no: %d\n", packet->sequence_no);
-	
-	/*
-	 * Receive the response packet from the server 
-	 */
-	struct sockaddr_in *fromServer = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in));
-	socklen_t fromServerSize = sizeof(struct sockaddr_in);
-	
-	printf("Waiting on packet from server...\n");
-	if(recvfrom(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *) fromServer, &fromServerSize) < 0){
-		printf("failed to read packet from server in sock352_connect()\nERRNO: %s\n", strerror(errno));
+	socket352_t *socket; 
+	if((socket = findSocket(&sockets, fd)) == NULL){
+		printf("Invalid fd in sock352_connect()\n"); 
 		return SOCK352_FAILURE; 
-    }
-
-    /*
-     * Make sure the ack_no on the response packet is right
-     */
-	printf("packet->ack_no: %d\n", packet->ack_no);
-    if(packet->ack_no != client_seqNo){
-        printf("Invalid ack_no from response packet in sock352_connect()\n");
-        return SOCK352_FAILURE;
-    }
+	}
 
 	/* 
-	 * Stuff to do with the received packet
-     *
-     * take the received packet and put the server's seq_no, add one to it and put it in the ack field
-     * then take the ack_no on the received packet and add one to it and put it in the seq_no field
+	 * Create the destination sockaddr_in 
 	 */
-    client_seqNo++; 
-    packet->ack_no = packet->sequence_no+1; 
-    packet->sequence_no = client_seqNo; 
-    packet->flags = 0; 
-    
-	/*
-	 * Send the last packet to the server
+	socket->other = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
+	socket->other->sin_family = AF_INET; 
+	socket->other->sin_addr.s_addr = dest->sin_addr.s_addr; 
+	socket->other->sin_port = htons(socket->remote_port); 
+
+	/* 
+	 * Create the packet to send 
 	 */
-	printf("Sending packet to server...\n");
-	if(sendto(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (const struct sockaddr *) dest, sizeof(struct sockaddr_in)) < 0){
-		printf("failed to send packet in sock352_connect()\nERRNO: %s\n", strerror(errno));
-		return SOCK352_FAILURE;	
+	packet_t *packet = (packet_t *)calloc(1, sizeof(packet_t)); 
+	packet->header = (sock352_pkt_hdr_t *)calloc(1, sizeof(sock352_pkt_hdr_t));
+	packet->header->version = SOCK352_VER_1; 
+	packet->header->flags = SOCK352_SYN; 
+	packet->header->sequence_no = getSeqNumber(socket);
+
+	/* 
+	 * Send the packet to the destination
+	 */
+	if((sendto(socket->sock_fd, packet->header, sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *)socket->other, sizeof(struct sockaddr_in))) < 0){
+		printf("Failed to send SYN packet in sock352_connect(): %s\n", strerror(errno));
+		return SOCK352_FAILURE; 
+	}
+
+	/* 
+	 * Change the connection state 
+	 */
+	socket->state = SYN_SENT; 
+
+
+	/* 
+	 * Wait for packet to arrive from server 
+	 */
+	socklen_t sockaddr_size = sizeof(struct sockaddr_in); 
+	printf("Waiting for packet from server...\n");
+	if((recvfrom(socket->sock_fd, packet->header, sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *)socket->other, &sockaddr_size)) < 0){
+		printf("Failed to read packet from server in sock352_connect(): %s\n", strerror(errno)); 
+		return SOCK352_FAILURE; 
+	}
+
+	/* 
+	 * Got packet from the server.. make sure SYN|ACK is set
+	 */
+	if(packet->header->flags != (SOCK352_SYN | SOCK352_ACK)){
+		printf("Invalid packet received from server\n"); 
+		return SOCK352_FAILURE; 
+	}
+
+	/* 
+	 * Update packet header to be sent 
+	 */
+	packet->header->flags = SOCK352_ACK; 
+	packet->header->ack_no = packet->header->sequence_no + 1; 
+	packet->header->sequence_no = getSeqNumber(socket);
+
+	/* 
+	 *  Set connection as established
+	 */
+	socket->state = ESTABLISHED; 
+
+	/* 
+	 *  Set the updated ACK packet to the server
+	 */ 
+	if((sendto(socket->sock_fd, packet->header, sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *)socket->other, sizeof(struct sockaddr_in))) < 0){
+		printf("Failed to send ACK packet in sock352_connect(): %s\n", strerror(errno)); 
+		return SOCK352_FAILURE;
 	}
 
 	return SOCK352_SUCCESS;
@@ -317,19 +280,19 @@ int sock352_listen(int fd, int n)
 	/*
 	 * Get the local socket 
 	 */
-	 socket352 *socket; 
-	 if((socket = findSocket(fd)) == NULL){
-	 	printf("Bad socket fd in sock352_listen()");
+	 socket352_t *socket; 
+	 if((socket = findSocket(&sockets, fd)) == NULL){
+	 	printf("Bad socket fd in sock352_listen()\n");
 	 	return SOCK352_FAILURE;
 	 }
 
 	/* 
 	 * Allocate space for the connections 
 	 */
-	socket->n = n; 
+	socket->n_connections = n; 
 	socket->connections = (int *)calloc(n, sizeof(int)); 
 
-	 return SOCK352_SUCCESS;
+	return SOCK352_SUCCESS;
 }
 
 /*
@@ -337,150 +300,96 @@ int sock352_listen(int fd, int n)
  *
  *  puts server to sleep waiting for a connection to arrive
  *  return value is a new fd, the connected fd.
+ *  addr is the address of the client that just connected
  *  called only by server side
  */
 int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 {
 	/* 
-	 * Get the local socket 
-	 */
-	socket352 *sock352; 
-	if((sock352 = findSocket(_fd)) == NULL) return SOCK352_FAILURE; 
-
-	/*
-	 * Create the local UDP socket port 
-	 */
-	int sock_fd = 0; 
-	if((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
-		printf("Failed to create socket in sock352_accpet(): %s\n", strerror(errno));
+	 *  Get our socket from the hash table 
+	 */ 
+	socket352_t *socket; 
+	if((socket = findSocket(&sockets, _fd)) == NULL){
+		printf("Failed to find the socket in sock352_accept()\n"); 
 		return SOCK352_FAILURE; 
 	}
 
 	/* 
-	 * Use local/remote or udp socket port
+	 *  Initalize the other sockaddr
 	 */
-	int local_port;
-	int remote_port; 
+	socket->other = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
 
-	if(sock352->port != -1){ /* use udp port */
-		local_port = remote_port = sock352->port;
-	}
-	else{
-		local_port = sock352->local_port; 
-		remote_port = sock352->remote_port; 
-		printf("local_port: %u\n", local_port);
-	}
-
-	/*
-	 * Create the local information to receive to
-	*/
-	struct sockaddr_in *self = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
-	self->sin_family = AF_INET; 
-	self->sin_addr.s_addr = sock352->sockaddr->sin_addr.s_addr; 
-	self->sin_port = htons(local_port);
-	
-	printf("binding on:\nself->sin_addr.s_addr: %u\nself->sin_port: %u\n", self->sin_addr.s_addr, self->sin_port);
-	
-	/*
-	 * Bind to the socket to the port 
+	/* 
+	 *  Create a packet struct to hold the incoming packet
 	 */
-	if(bind(sock_fd, (const struct sockaddr *)(self), sizeof(struct sockaddr_in)) != 0){
-		printf("Failed to bind socket to port during sock352_accept(): %s\n", strerror(errno));
-		return SOCK352_FAILURE; 
-	}
-	
-	/* packet buffer */
-	sock352_pkt_hdr_t *packet = (sock352_pkt_hdr_t *)calloc(1, sizeof(sock352_pkt_hdr_t)); 
-		
-	/* the from */
-	struct sockaddr_in *from = (struct sockaddr_in *)calloc(1, sizeof(struct sockaddr_in)); 
-	socklen_t fromSize = sizeof(struct sockaddr_in);	
+	packet_t *packet = (packet_t *)calloc(1, sizeof(packet_t)); 
+	packet->header = (sock352_pkt_hdr_t *)calloc(1, sizeof(sock352_pkt_hdr_t));
 
-	/*
-	 * Wait for a packet to come in 
+	/* 
+	 *  Create a socklen_t to size
 	 */
-	printf("Waiting to receive bytes...\n");
-	if(recvfrom(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *) from, &fromSize) < 0){
-		printf("Failed to read from socket in sock352_accept()\nERRNO: %s\n", strerror(errno));
+	socklen_t sockaddr_size = sizeof(struct sockaddr_in); 
+
+	/* 
+	 * Wait for an incoming SYN packet header
+	 */ 
+	printf("Waiting for client SYN packet...\n");
+	if((recvfrom(socket->sock_fd, packet->header, sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *)socket->other, &sockaddr_size)) < 0){
+		printf("Failed to read from socket in sock352_accept(): %s\n", strerror(errno)); 
 		return SOCK352_FAILURE; 
 	}
 
-		/* set up the from socket */
-	socket352 *fromSocket = (socket352 *)calloc(1, sizeof(socket352));
-	fromSocket->domain = AF_CS352; 
-	fromSocket->protocol = SOCK_STREAM; 
-	fromSocket->type = 0; 
-	fromSocket->port = from->sin_port; 
-	fromSocket->udp_sock_fd = sock_fd; 
-
-	/*
-	 * Add fromSocket to the list of socket
+	/* 
+	 * Got first packet from client.. Check if SYN bit is set 
 	 */
-	int client_fd = addSocket(fromSocket); 
+	if(packet->header->flags != SOCK352_SYN){
+		printf("Invalid packet received in sock352_accept()\n"); 
+		return SOCK352_FAILURE; 
+	}
 
-
-	/*
-	 * Add client to the list of connections 
+	/* 
+	 * Change the socket state 
 	 */
-	if(addClient(sock, client_fd) != 0){
-		printf("Failed to add client to current connections\n"); 
+	socket->state = SYN_RECEIVED; 
+
+	/* 
+	 *  Update packet to be sent 
+	 */ 
+	packet->header->flags = SOCK352_SYN | SOCK352_ACK; 
+	packet->header->ack_no = packet->header->sequence_no+1;
+	packet->header->sequence_no = getSeqNumber(socket); 
+
+
+	/* 
+	 *  Send the updated packet 
+	 */
+	if((sendto(socket->sock_fd, packet->header, sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *)socket->other, sockaddr_size)) < 0){
+		printf("Failed to send SYN|ACK packet in sock352_accept(): %s\n", strerror(errno));
+		return SOCK352_FAILURE; 
+	}
+
+	/* 
+	 * Change the state to established
+	 */ 
+	socket->state = ESTABLISHED; 
+
+
+	/* 
+	 *  Get ACK packet 
+	 */
+	printf("Waiting for ACK packet from client\n");
+	if((recvfrom(socket->sock_fd, packet->header, sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *) socket->other, &sockaddr_size)) < 0){
+		printf("Failed to received ACK packet in sock352_accept(): %s\n", strerror(errno));
 		return SOCK352_FAILURE;
 	}
 
-	/*
-	 * Check to see if SYN bit is set
-	 * 
-	 * if its not set, its a bad packet
-	 */
-	if((CHECK_BIT(packet->flags, 1))){
-        printf("SYN BIT is not set.\npacket->flags: %u\nERRNO: %s\n", packet->flags, strerror(errno));
-        return SOCK352_FAILURE;
-    }
-
-	/*
-	 * Set Up Response Packet 
-	 */
-	packet->ack_no = packet->sequence_no + 1;
-	packet->flags = SOCK352_SYN; 	
-	packet->sequence_no = genSerialNumber(10000);
-	printf("packet->sequnce number: %d\n", packet->sequence_no);
-	int serv_seq = packet->sequence_no+1;
-		
-	/*
-	 * Send a packet to the client 
-	 */
-	if(sendto(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (const struct sockaddr *)from, sizeof(struct sockaddr_in)) < 0){
-		printf("Failed to send packet in sock352_accept()\nERRNO: %s\n", strerror(errno));
-		return SOCK352_FAILURE; 
-	}
-
-	/*
-	 * Receive a packet
-	 */
-	if(recvfrom(sock_fd, packet, sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *)from, &fromSize) < 0){
-		printf("Failed to read from socket in sock352_accept()\nERRNO: %s\n", strerror(errno)); 
-		return SOCK352_FAILURE; 
-	}
-
-	/*
-	 * the SYN bit should not be set
-	 */
-	if(packet->flags == SOCK352_SYN){
-        printf("SYN bit is set\npacket->flags: %u\nERRNO %s\n", packet->flags, strerror(errno)); 
-        return SOCK352_FAILURE;
-	}
-
-	/*
-	 * Check ot see if the ack number is proper 
-	 */
-	if(packet->ack_no != serv_seq){
-		printf("Improper ack_no in incoming packet. Should be: %d Was %d\n", serv_seq, packet->ack_no);
+	if(packet->header->flags != SOCK352_ACK){
+		printf("Invalid ACK packet in sock352_accept()\n");
 		return SOCK352_FAILURE;
 	}
 
-	printf("sock_fd: %d\nclient_fd: %d\n", sock352->fd, client_fd);
+	return SOCK352_SUCCESS; 
 
-	return client_fd;
 }
 /*  sock352_close
  *
@@ -490,30 +399,7 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
  */
 int sock352_close(int fd)
 {
-	/* 
-	 * Find the socket
-	 */
-	socket352 *socket; 
-	if((socket = findSocket(fd)) == NULL){
-		printf("Unablet to find the socket: %d\n", fd); 
-		return SOCK352_FAILURE; 
-	}
-
-	/* 
-	 *  Add the packet with a FIN bit set to the end of the transmit list?
-	 */
-
-	/*
-	 * Wait for an ACK 
-	 */
-
-
-	/* 
-	 * Free stuff 
-	 */
-	deleteSocket(fd);
-	freeSockets(); /* free the sockets hash structure */
-
+	return 0; 
 }
 
 /*

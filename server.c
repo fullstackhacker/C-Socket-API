@@ -158,7 +158,7 @@ int main(int argc, char *argv[]) {
 		if ( (remote_port > 0) && (local_port > 0) ) {
 			retval =  sock352_init2(remote_port, local_port);
 		} else {
-			retval = sock352_init(udp_port);
+			retval = sock352_init(udp_port); 
 		}
 		if (retval != SOCK352_SUCCESS < 0) {
 			printf("server: initialization of 352 sockets on UDP port %d failed\n",udp_port);
