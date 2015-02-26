@@ -12,6 +12,7 @@
 #include "sock352.h"
 #include "socket352.c"
 #include <errno.h>
+#include <fcntl.h>
 
  /* 
   * All the current (active) connections
@@ -265,6 +266,12 @@ int sock352_connect(int fd, sockaddr_sock352_t *dest, socklen_t len)
 		return SOCK352_FAILURE;
 	}
 
+	/* 
+	 *  Create the transmit and receive lists 
+	 */ 
+	socket->unack_packets = (packet_t *)calloc(1, sizeof(packet_t)); 
+	socket->recv_packets = (packet_t *)calloc(1, sizeof(packet_t));
+
 	return SOCK352_SUCCESS;
 }
 
@@ -291,6 +298,11 @@ int sock352_listen(int fd, int n)
 	 */
 	socket->n_connections = n; 
 	socket->connections = (int *)calloc(n, sizeof(int)); 
+
+	/* 
+	 *  Make the socket non-blocking (?)
+	 */ 
+	fcntl(socket->sock_fd, F_SETFL, O_NONBLOCK);
 
 	return SOCK352_SUCCESS;
 }
@@ -388,6 +400,11 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 		return SOCK352_FAILURE;
 	}
 
+	/*
+	 *  Make the socket a non-blocking socket (??
+	 */
+	fcntl(socket->sock_fd, F_SETFL, O_NONBLOCK); 
+
 	return SOCK352_SUCCESS; 
 
 }
@@ -415,4 +432,72 @@ int sock352_read(int fd, void *buf, int count)
 int sock352_write(int fd, void *buf, int count)
 {
 	return 1; 
+}
+
+/* 
+ *  function to check to see if packets timed out
+ */
+int timeoutThread(socket352_t *socket){
+	/* 
+	 * Lock the socket connection 
+	 */
+	pthread_mutex_lock(socket->mutex); 
+
+	/* 
+	 * Resend packets that are timed out 
+	 */
+	packet_t *ptr = socket->unack_packets; 
+	for(; ptr != NULL; ptr = ptr->next){
+		if((sendto(socket->sock_fd, ptr, sizeof(packet_t), 0, (struct sockaddr *) socket->other, sizeof(struct sockaddr))) < 0){
+			printf("Failed to resend packet in timeoutThread(): %s\n", strerror(errno));
+			return SOCK352_FAILURE;
+		}
+	}
+
+	/* 
+	 * Unlock the socket connection 
+	 */
+	pthread_mutex_unlock(socket->mutex);
+
+	/* 
+	 * Call the receive packet function 
+	 * 
+	 * set up so that we "call" it, but it doesn't happen until we receive a packet
+	 */
+	 packet_t *packet = (packet_t *)calloc(1, sizeof(packet_t));
+	 while(recvfrom(socket->sock_fd, packet, sizeof(packet_t), 0, (struct sockaddr *)socket->other, &fromSize) == -1) continue; 
+	 receivePackets(socket, packet);
+
+	/* 
+	 * Sleep the desired time out
+	 */
+	sleep(TIMEOUT);
+}
+
+/* 
+ * Tracks the received packets
+ * 
+ * Gets called when we receive a packet 
+ */
+int receivePackets(socket352_t *socket, packet_t *packet){
+	/* 
+	 *  Lock the connection 
+	 */
+	pthread_mutex_lock(socket->mutex); 
+
+	/* 
+	 * update the transmit list with the new ack # 
+	 * find the place on the recv packets list 
+	 * insert the packet into the list 
+	 * find the lowest packet # 
+	 * send ack with the highest sequence number 
+	 * copy the data from the read pointer
+	 */
+
+	/* 
+	 *  Unlock the connection
+	 */
+	pthread_mutex_unlock(socket->mutex);
+
+	return 0; 
 }

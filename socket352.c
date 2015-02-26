@@ -71,6 +71,13 @@ int addTransPacket(socket352_t *socket, packet_t *packet){
      * Get to the end of transmit list
      */
     packet_t *ptr = socket->unack_packets; 
+
+    /* Check if the first packet is set up */
+    if(ptr->size == -1){
+        ptr = packet; 
+        return 0; 
+    }
+
     while(ptr->next != NULL) ptr = ptr->next; 
 
     /* 
@@ -87,6 +94,13 @@ int addTransPacket(socket352_t *socket, packet_t *packet){
  * Remove packet from the transmit list 
  */
 int removeTransPacket(socket352_t *socket, packet_t *packet){
+
+    if(socket->unack_packets == packet){
+        packet_t temp = socket->unack_packets; 
+        socket->unack_packets = temp->next; 
+        free(temp);
+        return 0; 
+    }
 
     packet_t *ptr = socket->unack_packets; 
     while(ptr != NULL){
