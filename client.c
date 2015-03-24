@@ -166,7 +166,6 @@ int main(int argc, char *argv[]) {
 	}
 	file_size = (uint32_t) file_stat.st_size;
 
-
 	/* check that we have a server */
 	if (destination == NULL) {
 		printf("client: no remote host specified\n");

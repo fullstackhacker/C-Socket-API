@@ -34,6 +34,7 @@ struct socket352{
     int n_connections; /* the number of connections in total */
     int *connections; /* the fds of the sockets that connected to the server */
     struct sockaddr_in *other; /* the "end" or "dest" of the connection */
+    struct sockaddr_in *local; /* the local end of the connection */
     pthread_mutex_t *mutex; /* mutex for the connection */
     packet_t *unack_packets; /* transmit list -- points to the head of the list */
     packet_t *recv_packets; /* received list (either acks or actual data) */
@@ -96,7 +97,7 @@ int addTransPacket(socket352_t *socket, packet_t *packet){
 int removeTransPacket(socket352_t *socket, packet_t *packet){
 
     if(socket->unack_packets == packet){
-        packet_t temp = socket->unack_packets; 
+        packet_t *temp = socket->unack_packets; 
         socket->unack_packets = temp->next; 
         free(temp);
         return 0; 
@@ -154,6 +155,17 @@ int unlockSocket(socket352_t *socket){
  */
 int getSeqNumber(socket352_t *socket){
     return socket->seq_no++; 
+}
+
+int addClient(socket352_t *server, socket352_t *client){
+    int i=0; 
+    for(;i<server->n_connections;i++){
+        if((server->connections)[i] == 0){
+            (server->connections)[i] = client->fd; 
+            return SOCK352_SUCCESS; 
+        }
+    }
+    return SOCK352_FAILURE; 
 }
 
 /* Socket hash table functions */
@@ -215,7 +227,6 @@ int deleteSocket(socket352_t **sockets, int fd){
 
     return 0; 
 }
-
 
 /* 
  * Frees the hash table 
