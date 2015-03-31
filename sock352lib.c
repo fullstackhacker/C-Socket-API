@@ -102,6 +102,16 @@ int sock352_init2(int remote_port, int local_port)
     return SOCK352_SUCCESS; 
 }
 
+/* 
+ *  sock352_init3()
+ * 
+ *  initializes local and remote ports, 
+ *  sets up environment variables
+ */
+int sock352_init3(int remote_port, int local_port, char *env_p[]){
+	return SOCK352_FAILURE;
+}
+
 /*
  * sock352_socket
 
@@ -426,13 +436,15 @@ int sock352_close(int fd)
 	 *  Create FIN packet
 	 */ 
 	packet_t *fin_packet = (packet_t *)calloc(1, sizeof(packet_t));
-	fin_packet->header->version = SOCK352_VER_1; 
-	fin_packet->header->payload_len = 0; 
-	fin_packet->header->
+	fin_packet->header.version = SOCK352_VER_1; 
+	fin_packet->header.payload_len = 0; 
+	fin_packet->header.flags = SOCK352_FIN;
+	fin_packet->header.sequence_no = getSeqNumber(socket);
 
-	 /* 
-	  *  Send FIN packet
-	  */ 
+	/* 
+	 *  Send FIN packet
+	 */
+	//if((sendto(socket->sock_fd))) 
 
 
 	/* 
@@ -447,6 +459,7 @@ int sock352_close(int fd)
 	/* 
 	 *  Close socket
 	 */
+	close(socket->sock_fd);
 
 	/* 
 	 *  Free things
