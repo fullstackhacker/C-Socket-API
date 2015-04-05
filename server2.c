@@ -78,7 +78,7 @@ uint64_t lapsed_usec(struct timeval * start, struct timeval *end){
 	}
 }
 
-int main(int argc, char *argv[], char *envp) {
+int main(int argc, char *argv[], char *envp[]) {
 		char *output_filename; /* name of the output file sent by the client */
 		int file_fd;           /* file descriptor for above  input file */
 		uint32_t file_size;
