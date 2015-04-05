@@ -9,7 +9,7 @@
  * Connection States
  */
 #define CLOSED 1 /* both - no active connection */
-#define CLOSING 2 /* both - waiting for the ACK pack from the other */
+#define CLOSING 2 /* both - waiting for the last ACK pack from the other */
 #define CLOSE_WAIT 3 /* both - waiting for a "FIN" packet from the self */
 #define TIME_WAIT 4 /* either - waiting for enough time to pass before officially closing the connection */
 #define FIN_WAIT_1 5 /* both - waiting for a "FIN" packet from the other, or waiting for the other to acknowledge the FIN packet sent */

@@ -109,7 +109,20 @@ int sock352_init2(int remote_port, int local_port)
  *  sets up environment variables
  */
 int sock352_init3(int remote_port, int local_port, char *env_p[]){
-	return SOCK352_FAILURE;
+	/* 
+	 *  Init the socket same as sock325_init2()
+	 */
+	if(sock352_init2(remote_port, local_port) == SOCK352_FAILURE){
+		return SOCK352_FAILURE; 
+	}
+
+	/* 
+	 *  Set the environment variables ????
+	 *  what do we do with the env_p ????
+	 */
+
+
+	return SOCK352_SUCCESS; 
 }
 
 /*
@@ -229,7 +242,7 @@ int sock352_connect(int fd, sockaddr_sock352_t *dest, socklen_t len)
 	/* 
 	 * Send the packet to the destination
 	 */
-	if((sendto(socket->sock_fd, &(packet->header), sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *)socket->other, sizeof(struct sockaddr_in))) < 0){
+	if((sendto(socket->sock_fd, packet, sizeof(packet_t), 0, (struct sockaddr *)socket->other, sizeof(struct sockaddr_in))) < 0){
 		printf("Failed to send SYN packet in sock352_connect(): %s\n", strerror(errno));
 		return SOCK352_FAILURE; 
 	}
@@ -279,6 +292,19 @@ int sock352_connect(int fd, sockaddr_sock352_t *dest, socklen_t len)
 	}
 
 	/* 
+	 *  Set socket timeout 
+	 */
+	struct timeval timeout; 
+	timeout.tv_sec = 1; 
+	timeout.tv_usec = 0;
+
+	/*
+	if(setsockopt(socket->sock_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(struct timeval)) < 0){
+		printf("Failed to set socket option in sock352_write(): %s\n", strerror(errno));
+		return SOCK352_FAILURE; 
+	}*/
+
+	/* 
 	 *  Create the transmit and receive lists 
 	 */ 
 	socket->unack_packets = (packet_t *)calloc(1, sizeof(packet_t)); 
@@ -310,6 +336,11 @@ int sock352_listen(int fd, int n)
 	 */
 	socket->n_connections = n; 
 	socket->connections = (int *)calloc(n, sizeof(int)); 
+
+	/* 
+	 *  Change the socket to LISTEN state
+	 */
+	socket->state = LISTEN;
 
 	return SOCK352_SUCCESS;
 }
@@ -406,6 +437,19 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	}
 
 	/* 
+	 *  Set socket timeout 
+	 */
+	struct timeval timeout; 
+	timeout.tv_sec = 1; 
+	timeout.tv_usec = 0;
+
+	/* 
+	if(setsockopt(socket352->sock_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(struct timeval)) < 0){
+		printf("Failed to set socket option in sock352_write(): %s\n", strerror(errno));
+		return SOCK352_FAILURE; 
+	}*/
+
+	/* 
 	 *  Create the connection for the client structure 
 	 */ 
 	socket352_t *client = (socket352_t *)calloc(1, sizeof(socket352_t));
@@ -423,6 +467,7 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
  */
 int sock352_close(int fd)
 {
+	printf("closing... \n");
 	/* 
 	 *  Get the socket 
 	 */
@@ -441,20 +486,81 @@ int sock352_close(int fd)
 	fin_packet->header.flags = SOCK352_FIN;
 	fin_packet->header.sequence_no = getSeqNumber(socket);
 
+	printf("about to send packet \n");	
+
 	/* 
 	 *  Send FIN packet
 	 */
-	//if((sendto(socket->sock_fd))) 
+	if(sendto(socket->sock_fd, fin_packet, sizeof(packet_t), 0, (struct sockaddr *)socket->other, sizeof(struct sockaddr_in)) < 0){
+		printf("Unable to send FIN packet in socket352_close(): %s", strerror(errno));
+		return SOCK352_FAILURE; 
+	} 
 
+	printf("sent fin packet... waiting for them... ");
+
+	socket->state = LAST_ACK;
+
+	/*  
+	 *  Create the receiving packet 
+	 */
+	packet_t *r_packet = (packet_t *)calloc(1, sizeof(packet_t)); 
 
 	/* 
 	 *  Wait for FIN or ACK packet
 	 */
+	if((recvfrom(socket->sock_fd, r_packet, sizeof(packet_t), 0, NULL, NULL)) < 0){
+		printf("Failed to read packet in sock352_close(): %s\n", strerror(errno)); 
+		return SOCK352_FAILURE;
+	}
 
+	printf(" got one .. waiting for second ... ");
+	/* 
+	 *  Check to see if we got an ACK packet or a FIN packet
+	 */
+	if(r_packet->header.flags == SOCK352_ACK){
+		socket->state = FIN_WAIT_2; 
+	}
+
+	if(r_packet->header.flags == SOCK352_FIN){
+		socket->state = CLOSING;
+	}
+
+	/* 
+	 * Should get the other one this time
+	 */
+	if((recvfrom(socket->sock_fd, r_packet, sizeof(packet_t), 0, NULL, NULL)) < 0){
+		printf("Fialed to read packet in sock352_close(): %s\n", strerror(errno));
+		return SOCK352_FAILURE; 
+	}
+
+	/* 
+	 *  Check to see if we got an ACK packet or a FIN packet
+	 */
+	if(r_packet->header.flags == SOCK352_ACK){
+		socket->state = FIN_WAIT_2; 
+	}
+
+	if(r_packet->header.flags == SOCK352_FIN){
+		socket->state = LAST_ACK;
+	}
+
+	/* 
+	 *  Create an ack packet 
+	 */
+	packet_t *ack_packet = (packet_t *)calloc(1, sizeof(packet_t)); 
+	ack_packet->header.version = SOCK352_VER_1; 
+	ack_packet->header.header_len = sizeof(sock352_pkt_hdr_t);
+	ack_packet->header.flags = SOCK352_ACK; 
 
 	/* 
 	 *  Send Last ACK after receiving FIN
 	 */
+	if((sendto(socket->sock_fd, ack_packet, sizeof(packet_t), 0, (struct sockaddr *)socket->other, sizeof(struct sockaddr_in))) < 0 ){ 
+		printf("Failed to send last ack packet in sock352_close(): %s\n", strerror(errno)); 
+		return SOCK352_FAILURE;
+	}
+
+	socket->state = CLOSING; 
 
 	/* 
 	 *  Close socket
@@ -464,7 +570,9 @@ int sock352_close(int fd)
 	/* 
 	 *  Free things
 	 */
-
+	free(fin_packet);
+	free(r_packet);
+	free(ack_packet);
 	free(socket);
 	free(sockets);
 
@@ -521,6 +629,8 @@ int sock352_read(int fd, void *buf, int count)
 		return SOCK352_FAILURE; 
 	}
 
+	printf("sequnece number: %d\n", r_packet->header.sequence_no);
+
 	/* 
 	 *  Set up ack no
 	 */
@@ -544,6 +654,8 @@ int sock352_read(int fd, void *buf, int count)
 	 */
 	free(ack_packet);
 	free(r_packet);
+
+	printf("%d \n", r_packet->header.payload_len);
 
 	return r_packet->header.payload_len;
 }
@@ -587,35 +699,51 @@ int sock352_write(int fd, void *buf, int count)
 	packet->header.sequence_no = getSeqNumber(socket);
 	packet->header.payload_len = count;
 
+	printf("payload size: %d\ncount: %d\n", packet->header.payload_len, count);
+
 	/* 
 	 *  Create the recv packet 
 	 */
 	packet_t *r_packet = (packet_t *)calloc(1, sizeof(packet_t));
 
 	int bytes_written; 
+	int packet_sent = 0; 
 
-	/* 
-	 *  Send the packet 
-	 */
-	if((bytes_written = sendto(socket->sock_fd, packet, sizeof(*packet), 0, (struct sockaddr *)socket->other, sizeof(struct sockaddr_in))) < 0){
-		printf("Failed to write to packet in sock352_write(): %s\n", strerror(errno));
-		return SOCK352_FAILURE;
-	}
+	while(packet_sent == 0){
+		/* 
+		 *  Send the packet 
+		 */
+		if((bytes_written = sendto(socket->sock_fd, packet, sizeof(*packet), 0, (struct sockaddr *)socket->other, sizeof(struct sockaddr_in))) < 0){
+			printf("Failed to write to packet in sock352_write(): %s\n", strerror(errno));
+			return SOCK352_FAILURE;
+		}
 
-	/* 
-	 *  Receive the ack packet 
-	 */
-	if((recvfrom(socket->sock_fd, r_packet, sizeof(packet_t), 0, NULL, NULL)) < 0){
-		printf("Failed to read ack packet in sock352_read(): %s\n", strerror(errno));
-		return SOCK352_FAILURE;
-	}
+		/* 
+		 *  Receive the ack packet 
+		 */
+		int bytes_read;
+		if((bytes_read = recvfrom(socket->sock_fd, r_packet, sizeof(packet_t), 0, NULL, NULL)) < 0){
+			printf("Failed to read ack packet in sock352_read(): %s\n", strerror(errno));
+			return SOCK352_FAILURE;
+		}
 
-	/* 
-	 *  Confirm the ack number and ack flags
-	 */
-	if(r_packet->header.ack_no != packet->header.sequence_no || r_packet->header.flags != SOCK352_ACK){
-		printf("Invalid packet received in sock352_write()\n");
-		return SOCK352_FAILURE; 
+		packet_sent = 1; /* say we sent the packet */
+
+		/* 
+		 * Socket timed out 
+		 * -- Check if we actually did send it
+		 */
+		if(bytes_read < sizeof(packet_t) || errno == EWOULDBLOCK){
+			packet_sent = 0; /* did not send it */
+		}
+
+		/* 
+		 *  Confirm the ack number and ack flags
+		 */
+		if(r_packet->header.ack_no != packet->header.sequence_no || r_packet->header.flags != SOCK352_ACK){
+			printf("Invalid packet received in sock352_write()\n");
+			return SOCK352_FAILURE; 
+		}
 	}
 
 	/* 

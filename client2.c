@@ -248,7 +248,7 @@ int main(int argc, char *argv[], char *envp[]) {
 	sock352_read(dest_sock,&file_size_network,sizeof(file_size_network));
 	file_size = htonl((int) file_size_network);
 
-	total_bytes =0;
+	total_bytes = zero_bytes = socket_closed = 0;
 	/* loop until we either get the whole file or there is an error */
 	while ( (total_bytes < file_size) && (! socket_closed)) {
 		bytes_read = sock352_read(dest_sock,buffer,BUFFER_SIZE);
