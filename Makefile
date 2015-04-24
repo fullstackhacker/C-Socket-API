@@ -44,27 +44,36 @@ CLIENT_OBJ = client.o sock352lib.o
 SERVER_OBJ = server.o sock352lib.o 
 CLIENT2_OBJ = client2.o sock352lib.o 
 SERVER2_OBJ = server2.o sock352lib.o 
+CLIENT_CRYPTO_OBJ = client_crypto.o sock352lib.o 
+SERVER_CRYPTO_OBJ = server_crypto.o sock352lib.o 
+INCLUDES = -I sodium
+LIBS =  -lssl -lcrypto -lm -lpthread 
 
-LIBS = -lssl -lcrypto -lm -lpthread
-
-all: client server client2 server2
+all: client server client2 server2 client_crypto server_crypto 
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-client: $(CLIENT_OBJ)
-	gcc -o $@ $^ $(CFLAGS) $(LIBS) 
+client: $(CLIENT_OBJ) 
+	gcc -o $@ $^ $(CFLAGS) $(INCLUDES) $(LIBS) 
 
 server: $(SERVER_OBJ) 
-	gcc -o $@ $^ $(CFLAGS) $(LIBS)
+	gcc -o $@ $^ $(CFLAGS) $(INCLUDES) $(LIBS)
 
 client2: $(CLIENT2_OBJ)
-	gcc -o $@ $^ $(CFLAGS) $(LIBS) 
+	gcc -o $@ $^ $(CFLAGS) $(INCLUDES) $(LIBS) 
 
 server2: $(SERVER2_OBJ) 
-	gcc -o $@ $^ $(CFLAGS) $(LIBS)
+	gcc -o $@ $^ $(CFLAGS) $(INCLUDES) $(LIBS)
+
+client_crypto: $(CLIENT_CRYPTO_OBJ)
+	gcc -o $@ $^  libsodium.a $(CFLAGS) $(INCLUDES) $(LIBS)
+
+server_crypto: $(SERVER_CRYPTO_OBJ) 
+	gcc -o $@ $^  libsodium.a $(CFLAGS) $(INCLUDES) $(LIBS) 
 
 .PHONY: clean
 
 clean:
-	rm -f client server client2 server2 *.o core  
+	rm -f client server client2 server2 client_crypto server_crypto *.o core  
+

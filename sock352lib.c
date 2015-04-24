@@ -292,19 +292,6 @@ int sock352_connect(int fd, sockaddr_sock352_t *dest, socklen_t len)
 	}
 
 	/* 
-	 *  Set socket timeout 
-	 */
-	struct timeval timeout; 
-	timeout.tv_sec = 1; 
-	timeout.tv_usec = 0;
-
-	
-	if(setsockopt(socket->sock_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(struct timeval)) < 0){
-		printf("Failed to set socket option in sock352_write(): %s\n", strerror(errno));
-		return SOCK352_FAILURE; 
-	}
-
-	/* 
 	 *  Create the transmit and receive lists 
 	 */ 
 	socket->unack_packets = (packet_t *)calloc(1, sizeof(packet_t)); 
@@ -439,18 +426,6 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	if(packet->header.flags != SOCK352_ACK){
 		printf("Invalid ACK packet in sock352_accept()\n");
 		return SOCK352_FAILURE;
-	}
-
-	/* 
-	 *  Set socket timeout 
-	 */
-	struct timeval timeout; 
-	timeout.tv_sec = 1; 
-	timeout.tv_usec = 0;
-
-	if(setsockopt(socket352->sock_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(struct timeval)) < 0){
-		printf("Failed to set socket option in sock352_write(): %s\n", strerror(errno));
-		return SOCK352_FAILURE; 
 	}
 
 	/* 
@@ -604,13 +579,11 @@ int sock352_read(int fd, void *buf, int count)
 	/* 
 	 *  Read a packet 
 	 */
-	int bytes_read; 
-	if((bytes_read = recvfrom(socket->sock_fd, (packet_t *)r_packet, sizeof(packet_t), 0, NULL, NULL)) < 0){
+
+	if(recvfrom(socket->sock_fd, (packet_t *)r_packet, sizeof(packet_t), 0, NULL, NULL) < 0){
 		printf("Failed to receive packet in sock352_read(): %s\n", strerror(errno));
 		return SOCK352_FAILURE; 
 	}
-
-	printf("sequnece number: %d\n", r_packet->header.sequence_no);
 
 	/* 
 	 *  Set up ack no
@@ -630,15 +603,13 @@ int sock352_read(int fd, void *buf, int count)
 	 */
 	memcpy(buf, r_packet->data, count);
 
-	int payload = r_packet->header.payload_len; 
-
 	/* 
 	 *  Free stuff
 	 */
 	free(ack_packet);
-	free(r_packet);
+	//free(r_packet);
 
-	return payload; 
+	return r_packet->header.payload_len; 
 }
 
 
@@ -709,14 +680,6 @@ int sock352_write(int fd, void *buf, int count)
 		}
 
 		packet_sent = 1; /* say we sent the packet */
-
-		/* 
-		 * Socket timed out 
-		 * -- Check if we actually did send it
-		 */
-		if(bytes_read < sizeof(packet_t) || errno == EWOULDBLOCK){
-			packet_sent = 0; /* did not send it */
-		}
 
 		/* 
 		 *  Confirm the ack number and ack flags
