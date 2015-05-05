@@ -234,16 +234,19 @@ int sock352_connect(int fd, sockaddr_sock352_t *dest, socklen_t len)
 	/* 
 	 * Create the packet to send 
 	 */
-	packet_t *packet = (packet_t *)calloc(1, sizeof(packet_t)); 
-	packet->header.version = SOCK352_VER_1; 
-	packet->header.header_len = sizeof(sock352_pkt_hdr_t);
-	packet->header.flags = SOCK352_SYN; 
-	packet->header.sequence_no = getSeqNumber(socket);
+	packet_t packet; 
+	packet.header.version = SOCK352_VER_1; 
+	packet.header.header_len = htons((uint16_t)sizeof(sock352_pkt_hdr_t));
+	packet.header.flags = SOCK352_SYN; 
+	packet.header.sequence_no = getSeqNumber(socket);
+	packet.header.window = sizeof(packet.data);
+
+	printf("header len: %d\n", packet.header.header_len);
 
 	/* 
 	 * Send the packet to the destination
 	 */
-	if((sendto(socket->sock_fd, packet, sizeof(packet_t), 0, (struct sockaddr *)socket->other, sizeof(struct sockaddr_in))) < 0){
+	if((sendto(socket->sock_fd, &(packet.header), sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *)socket->other, sizeof(struct sockaddr_in))) < 0){
 		printf("Failed to send SYN packet in sock352_connect(): %s\n", strerror(errno));
 		return SOCK352_FAILURE; 
 	}
@@ -258,25 +261,28 @@ int sock352_connect(int fd, sockaddr_sock352_t *dest, socklen_t len)
 	 */
 	socklen_t sockaddr_size = sizeof(struct sockaddr_in); 
 	printf("Waiting for packet from server...\n");
-	if((recvfrom(socket->sock_fd, &(packet->header), sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *)socket->other, &sockaddr_size)) < 0){
+	if((recvfrom(socket->sock_fd, &(packet.header), sizeof(packet_t), 0, (struct sockaddr *)socket->other, &sockaddr_size)) < 0){
 		printf("Failed to read packet from server in sock352_connect(): %s\n", strerror(errno)); 
 		return SOCK352_FAILURE; 
 	}
 
 	/* 
 	 * Got packet from the server.. make sure SYN|ACK is set
-	 */
+	
 	if(packet->header.flags != (SOCK352_SYN | SOCK352_ACK)){
 		printf("Invalid packet received from server\n"); 
 		return SOCK352_FAILURE; 
 	}
+	*/
+
+	printf("packet->header_len: %d\n", packet.header.header_len);
 
 	/* 
 	 * Update packet header to be sent 
 	 */
-	packet->header.flags = SOCK352_ACK; 
-	packet->header.ack_no = packet->header.sequence_no + 1; 
-	packet->header.sequence_no = getSeqNumber(socket);
+	packet.header.flags = SOCK352_ACK; 
+	packet.header.ack_no = packet.header.sequence_no + 1; 
+	packet.header.sequence_no = getSeqNumber(socket);
 
 	/* 
 	 *  Set connection as established
@@ -286,21 +292,21 @@ int sock352_connect(int fd, sockaddr_sock352_t *dest, socklen_t len)
 	/* 
 	 *  Set the updated ACK packet to the server
 	 */ 
-	if((sendto(socket->sock_fd, &(packet->header), sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *)socket->other, sizeof(struct sockaddr_in))) < 0){
+	if((sendto(socket->sock_fd, &(packet.header), sizeof(sock352_pkt_hdr_t), 0, (struct sockaddr *)socket->other, sizeof(struct sockaddr_in))) < 0){
 		printf("Failed to send ACK packet in sock352_connect(): %s\n", strerror(errno)); 
 		return SOCK352_FAILURE;
 	}
 
 	/* 
 	 *  Create the transmit and receive lists 
-	 */ 
+	 
 	socket->unack_packets = (packet_t *)calloc(1, sizeof(packet_t)); 
 	socket->recv_packets = (packet_t *)calloc(1, sizeof(packet_t));
-
+	*/
 	/* 
 	 *  Free stuff ( the packet )
 	 */
-	free(packet);
+	//free(packet);
 
 	return SOCK352_SUCCESS;
 }
@@ -380,6 +386,8 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 		return SOCK352_FAILURE; 
 	}
 
+	printf("packet->header.header_len: %u\n", packet->header.header_len);
+
 	/* 
 	 * Got first packet from client.. Check if SYN bit is set 
 	 */
@@ -399,6 +407,7 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 	packet->header.flags = SOCK352_SYN | SOCK352_ACK; 
 	packet->header.ack_no = packet->header.sequence_no;
 	packet->header.sequence_no = getSeqNumber(socket352); 
+	packet->header.window = sizeof(packet->data);
 
 
 	/* 
@@ -423,10 +432,11 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len)
 		return SOCK352_FAILURE;
 	}
 
+	/*
 	if(packet->header.flags != SOCK352_ACK){
 		printf("Invalid ACK packet in sock352_accept()\n");
 		return SOCK352_FAILURE;
-	}
+	}*/
 
 	/* 
 	 *  Create the connection for the client structure 
@@ -466,7 +476,7 @@ int sock352_close(int fd)
 	 */
 	packet_t *fin_packet = (packet_t *)calloc(1, sizeof(packet_t)); 
 	fin_packet->header.version = SOCK352_VER_1;
-	fin_packet->header.header_len = sizeof(sock352_pkt_hdr_t); 
+	fin_packet->header.header_len = (uint16_t)sizeof(sock352_pkt_hdr_t); 
 	fin_packet->header.payload_len = 0; 
 	fin_packet->header.flags = SOCK352_FIN; 
 
@@ -494,7 +504,7 @@ int sock352_close(int fd)
 	 */
 	packet_t *ack_packet = (packet_t *)calloc(1, sizeof(packet_t)); 
 	ack_packet->header.version = SOCK352_VER_1; 
-	ack_packet->header.header_len = sizeof(sock352_pkt_hdr_t); 
+	ack_packet->header.header_len = (uint16_t)sizeof(sock352_pkt_hdr_t); 
 	ack_packet->header.payload_len = 0; 
 	ack_packet->header.flags = SOCK352_ACK; 
 
@@ -565,22 +575,23 @@ int sock352_read(int fd, void *buf, int count)
 	/* 
 	 *  Create the packet to read to 
 	 */
-	packet_t *r_packet = (packet_t *)calloc(1, sizeof(packet_t));
+	packet_t r_packet;
 
 	/* 
 	 *  Create the ack packet to respond with 
 	 */
 	packet_t *ack_packet = (packet_t *)calloc(1, sizeof(packet_t));
 	ack_packet->header.version = SOCK352_VER_1; 
-	ack_packet->header.header_len = sizeof(sock352_pkt_hdr_t);
+	ack_packet->header.header_len = (uint16_t)sizeof(sock352_pkt_hdr_t);
 	ack_packet->header.sequence_no = getSeqNumber(socket);
 	ack_packet->header.flags = SOCK352_ACK; 
 
 	/* 
 	 *  Read a packet 
 	 */
+	 int bytes_read = 0; 
 
-	if(recvfrom(socket->sock_fd, (packet_t *)r_packet, sizeof(packet_t), 0, NULL, NULL) < 0){
+	if((bytes_read = recvfrom(socket->sock_fd, &r_packet, sizeof(packet_t), 0, NULL, NULL)) < 0){
 		printf("Failed to receive packet in sock352_read(): %s\n", strerror(errno));
 		return SOCK352_FAILURE; 
 	}
@@ -588,7 +599,7 @@ int sock352_read(int fd, void *buf, int count)
 	/* 
 	 *  Set up ack no
 	 */
-	ack_packet->header.ack_no = r_packet->header.sequence_no; 
+	ack_packet->header.ack_no = r_packet.header.sequence_no; 
 
 	/* 
 	 *  Send ack packet
@@ -601,7 +612,7 @@ int sock352_read(int fd, void *buf, int count)
 	/* 
 	 *  Copy the information over into the buffer
 	 */
-	memcpy(buf, r_packet->data, count);
+	memcpy(buf, r_packet.data, count);
 
 	/* 
 	 *  Free stuff
@@ -609,7 +620,9 @@ int sock352_read(int fd, void *buf, int count)
 	free(ack_packet);
 	//free(r_packet);
 
-	return r_packet->header.payload_len; 
+	printf("payload size: %d\n", ntohs(bytes_read));
+
+	return ntohs(r_packet.header.payload_len); 
 }
 
 
@@ -647,9 +660,9 @@ int sock352_write(int fd, void *buf, int count)
 	 *  Create and set up the send packet header
 	 */
 	packet->header.version = SOCK352_VER_1; 
-	packet->header.header_len = sizeof(sock352_pkt_hdr_t);
+	packet->header.header_len = (uint16_t)sizeof(sock352_pkt_hdr_t);
 	packet->header.sequence_no = getSeqNumber(socket);
-	packet->header.payload_len = count;
+	packet->header.payload_len = htons(count);
 
 	printf("payload size: %d\ncount: %d\n", packet->header.payload_len, count);
 
